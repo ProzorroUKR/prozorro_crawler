@@ -1,0 +1,52 @@
+from pythonjsonlogger import jsonlogger
+import logging
+import os
+
+# timeouts for api calls
+# every FEED_STEP_INTERVAL every crawler(backward and forward) gets API_LIMIT items
+# and processes every one of them
+# so this is (API_LIMIT + 1) x number of crawlers every FEED_STEP_INTERVAL seconds
+FEED_STEP_INTERVAL = int(os.environ.get("FEED_STEP_INTERVAL", 0))
+TOO_MANY_REQUESTS_INTERVAL = int(os.environ.get("TOO_MANY_REQUESTS_INTERVAL", 10))
+CONNECTION_ERROR_INTERVAL = int(os.environ.get("CONNECTION_ERROR_INTERVAL", 5))
+NO_ITEMS_INTERVAL = int(os.environ.get("CONNECTION_ERROR_INTERVAL", 15))
+
+LOGGER_NAME = os.environ.get("LOGGER_NAME", "PRO-ZORRO-CRAWLER")
+PUBLIC_API_HOST = os.environ.get("PUBLIC_API_HOST", "https://public-api-sandbox.prozorro.gov.ua")
+assert not PUBLIC_API_HOST.endswith("/")
+assert PUBLIC_API_HOST.startswith("http")
+API_VERSION = os.environ.get("API_VERSION", "2.5")
+API_LIMIT = int(os.environ.get("API_LIMIT", 100))
+API_MODE = os.environ.get("API_MODE", "_all_")
+API_OPT_FIELDS = os.environ.get("API_OPT_FIELDS", "").split(",")
+BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}/tenders"
+
+STORE_CLAIMS = os.environ.get("STORE_CLAIMS")
+STORE_DRAFTS = os.environ.get("STORE_DRAFTS")
+STORE_WO_DATE = os.environ.get("STORE_WO_DATE")
+
+TENDER_FIELDS = os.environ.get(
+    "TENDER_FIELDS",
+    "id,status,procurementMethod,procurementMethodType,dateModified,mode"
+).split(",")
+LOT_FIELDS = os.environ.get("LOT_FIELDS", "id,status").split(",")
+
+MONGODB_URL = os.environ.get("MONGODB_URL", "mongodb://root:example@mongo:27017")
+MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "prozorro-crawler")
+MONGODB_COLLECTION = os.environ.get("MONGODB_COLLECTION", "complaints")
+MONGODB_STATE_COLLECTION = os.environ.get("MONGODB_STATE_COLLECTION", "prozorro-crawler-state")
+MONGODB_STATE_ID = os.environ.get("MONGODB_STATE_ID", "FEED_CRAWLER_STATE")
+MONGODB_ERROR_INTERVAL = int(os.environ.get("MONGODB_ERROR_INTERVAL", 5))
+
+
+# logging
+LOG_LEVEL = int(os.environ.get("LOG_LEVEL", logging.INFO))
+logger = logging.getLogger(LOGGER_NAME)
+logger.setLevel(LOG_LEVEL)
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    '%(levelname)s %(asctime)s %(module)s %(process)d '
+    '%(message)s %(pathname)s $(lineno)d $(funcName)s'
+)
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
