@@ -9,10 +9,9 @@ test:
     - kube
   script:
     - pip install -r requirements.txt
-    - pip install coverage
-    - pip install coveralls
+    - pip install pytest pytest-asyncio coverage coveralls
     - cd src
-    - coverage run --source=. -m unittest discover
+    - coverage run --omit=*tests*  --source=. -m pytest
     - coverage report
   coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
 

@@ -78,7 +78,7 @@ async def init_feed(session):
                     ),
                     extra={"MESSAGE_ID": "FEED_ERROR"}
                 )
-        await asyncio.sleep(FEED_STEP_INTERVAL)
+            await asyncio.sleep(FEED_STEP_INTERVAL)
 
 
 async def crawler(session, **kwargs):
@@ -127,7 +127,7 @@ async def crawler(session, **kwargs):
                     ),
                     extra={"MESSAGE_ID": "FEED_UNEXPECTED_ERROR"}
                 )
-        await asyncio.sleep(FEED_STEP_INTERVAL)
+            await asyncio.sleep(FEED_STEP_INTERVAL)
 
     logger.info("Crawler stopped", extra={"FEED_PARAMS": feed_params, "MESSAGE_ID": "CRAWLER_STOPPED"})
 
