@@ -4,6 +4,7 @@ from settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
     NO_ITEMS_INTERVAL, BASE_URL
 )
+from json.decoder import JSONDecodeError
 from .base import AsyncMock
 import aiohttp
 import pytest
@@ -87,6 +88,31 @@ async def test_init_feed():
         (session, "t"),
         (session, "f"),
     )
+
+
+@pytest.mark.asyncio
+async def test_init_feed_payload_error():
+    session = MagicMock()
+
+    session.get = AsyncMock(side_effect=[
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=aiohttp.ClientPayloadError("Response payload is not completed"))
+        ),
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=JSONDecodeError("Failed decode", "", 0))
+        ),
+        StopAsyncIteration
+    ])
+
+    with patch("main.asyncio.sleep", AsyncMock()) as sleep_mock:
+        try:
+            await init_feed(session)
+        except StopAsyncIteration:
+            pass
+
+    assert sleep_mock.mock_calls == [call(CONNECTION_ERROR_INTERVAL), call(CONNECTION_ERROR_INTERVAL)]
 
 
 @pytest.mark.asyncio
@@ -200,6 +226,33 @@ async def test_crawler_404():
 
 
 @pytest.mark.asyncio
+async def test_crawler_payload_error():
+    session = MagicMock()
+    session.get = AsyncMock(side_effect=[
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=aiohttp.ClientPayloadError("Response payload is not completed"))
+        ),
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=JSONDecodeError("Failed decode", "", 0))
+        ),
+        StopAsyncIteration
+    ])
+
+    with patch("main.asyncio.sleep", AsyncMock()) as sleep_mock:
+        try:
+            await crawler(session)
+        except StopAsyncIteration:
+            pass
+
+    assert sleep_mock.mock_calls == [
+        call(CONNECTION_ERROR_INTERVAL),
+        call(CONNECTION_ERROR_INTERVAL),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_process_tender():
     session = MagicMock()
     data = {"data": "hello"}
@@ -246,6 +299,33 @@ async def test_process_tender_error():
         await process_tender(session, {"id": "abc"})
     session.get.assert_called_once_with(BASE_URL + "/abc")
     get_complaint_data_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_tender_payload_error():
+    session = MagicMock()
+    session.get = AsyncMock(side_effect=[
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=aiohttp.ClientPayloadError("Response payload is not completed"))
+        ),
+        MagicMock(
+            status=200,
+            json=AsyncMock(side_effect=JSONDecodeError("Failed decode", "", 0))
+        ),
+        StopAsyncIteration
+    ])
+
+    with patch("main.asyncio.sleep", AsyncMock()) as sleep_mock:
+        try:
+            await process_tender(session, {"id": "abc"})
+        except StopAsyncIteration:
+            pass
+
+    assert sleep_mock.mock_calls == [
+        call(CONNECTION_ERROR_INTERVAL),
+        call(CONNECTION_ERROR_INTERVAL),
+    ]
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from settings import (
     logger, BASE_URL, PUBLIC_API_HOST, API_LIMIT, API_OPT_FIELDS, API_MODE,
     CONNECTION_ERROR_INTERVAL, FEED_STEP_INTERVAL, NO_ITEMS_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
 )
+from json.decoder import JSONDecodeError
 import aiohttp
 import asyncio
 import signal
@@ -61,11 +62,17 @@ async def init_feed(session):
         try:
             resp = await session.get(BASE_URL, params=feed_params)
         except aiohttp.ClientError as e:
-            logger.exception(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(f"Init feed {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
-                init_response = await resp.json()
+                try:
+                    init_response = await resp.json()
+                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+                    logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+                    continue
+
                 process_items_tasks = (process_tender(session, item) for item in init_response["data"])
                 await asyncio.gather(*process_items_tasks)
 
@@ -91,11 +98,16 @@ async def crawler(session, **kwargs):
         try:
             resp = await session.get(BASE_URL, params=feed_params)
         except aiohttp.ClientError as e:
-            logger.exception(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(f"Crawler {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
-                response = await resp.json()
+                try:
+                    response = await resp.json()
+                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+                    logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+                    continue
                 if response["data"]:
                     process_items_tasks = (process_tender(session, item) for item in response["data"])
                     await asyncio.gather(*process_items_tasks)
@@ -137,13 +149,18 @@ async def process_tender(session, tender):
         try:
             resp = await session.get(f"{BASE_URL}/{tender['id']}")
         except aiohttp.ClientError as e:
-            logger.exception(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(f"Tender {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
-                response = await resp.json()
-                save_complaint_tasks = [save_complaint_data(c) for c in get_complaint_data(response["data"])]
-                return await asyncio.gather(*save_complaint_tasks)
+                try:
+                    response = await resp.json()
+                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+                    logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+                else:
+                    save_complaint_tasks = [save_complaint_data(c) for c in get_complaint_data(response["data"])]
+                    return await asyncio.gather(*save_complaint_tasks)
             elif resp.status == 429:
                 logger.warning("Too many requests while getting tender", extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
                 await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)

@@ -22,7 +22,7 @@ async def prepare_storage():
             try:
                 r = await collection.create_index([(field, 1)])
             except PyMongoError as e:
-                logger.exception(e, extra={"MESSAGE_ID": "MONGODB_EXC"})
+                logger.warning(f"Prep storage {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             else:
                 logger.info(f"Created index: {r}", extra={"MESSAGE_ID": "MONGODB_INDEX_SUCCESS"})
                 break
@@ -41,8 +41,8 @@ async def save_complaint_data(data):
                 {"$set": data},
                 upsert=True
             )
-        except PyMongoError as exc:
-            logger.exception(exc, extra={"MESSAGE_ID": "MONGODB_EXC"})
+        except PyMongoError as e:
+            logger.warning(f"Save complaint {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)
 
 
@@ -55,8 +55,8 @@ async def save_feed_position(data):
                 {"$set": data},
                 upsert=True
             )
-        except PyMongoError as exc:
-            logger.exception(exc, extra={"MESSAGE_ID": "MONGODB_EXC"})
+        except PyMongoError as e:
+            logger.warning(f"Save feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)
 
 
@@ -65,8 +65,8 @@ async def get_feed_position():
     while True:
         try:
             return await collection.find_one({"_id": MONGODB_STATE_ID})
-        except PyMongoError as exc:
-            logger.exception(exc, extra={"MESSAGE_ID": "MONGODB_EXC"})
+        except PyMongoError as e:
+            logger.warning(f"Get feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)
 
 
@@ -75,6 +75,6 @@ async def drop_feed_position():
     while True:
         try:
             return await collection.delete_one({"_id": MONGODB_STATE_ID})
-        except PyMongoError as exc:
-            logger.exception(exc, extra={"MESSAGE_ID": "MONGODB_EXC"})
+        except PyMongoError as e:
+            logger.warning(f"Drop feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)
