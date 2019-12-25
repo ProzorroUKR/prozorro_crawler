@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-from storage import (
-    save_complaint_data, prepare_storage,
-    get_feed_position, drop_feed_position, save_feed_position,
-)
-from model import get_complaint_data
-from settings import (
+from prozorro_crawler.storage import get_feed_position, drop_feed_position, save_feed_position
+from prozorro_crawler.settings import (
     logger, BASE_URL, PUBLIC_API_HOST, API_LIMIT, API_OPT_FIELDS, API_MODE,
     CONNECTION_ERROR_INTERVAL, FEED_STEP_INTERVAL, NO_ITEMS_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
 )
@@ -17,8 +13,10 @@ import signal
 RUN = True
 
 
-async def main():
-    await prepare_storage()
+async def run_app(data_handler, init_task=None):
+
+    if init_task is not None:
+        await init_task()
 
     logger.info(f"Start crawling {BASE_URL}", extra={"MESSAGE_ID": "START_CRAWLING"})
     conn = aiohttp.TCPConnector(ttl_dns_cache=300)
@@ -41,11 +39,11 @@ async def main():
                 if server_id:
                     session.cookie_jar.update_cookies({"SERVER_ID": server_id})
             else:
-                backward_offset, forward_offset = await init_feed(session)
+                backward_offset, forward_offset = await init_feed(session, data_handler)
 
             await asyncio.gather(
-                crawler(session, offset=forward_offset),
-                crawler(session, offset=backward_offset, descending="1"),  # backward crawler
+                crawler(session, data_handler, offset=forward_offset),
+                crawler(session, data_handler, offset=backward_offset, descending="1"),  # backward crawler
             )
 
         # we actually don't need this, as crawlers await their tasks now, but just in case
@@ -55,7 +53,7 @@ async def main():
         await asyncio.gather(*pending_tasks)
 
 
-async def init_feed(session):
+async def init_feed(session, data_handler):
     feed_params = get_feed_params(descending="1")
     logger.info("Crawler initialization", extra={"MESSAGE_ID": "CRAWLER_INIT"})
     while True:
@@ -73,9 +71,7 @@ async def init_feed(session):
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                     continue
 
-                process_items_tasks = (process_tender(session, item) for item in init_response["data"])
-                await asyncio.gather(*process_items_tasks)
-
+                await data_handler(init_response["data"])
                 return init_response["next_page"]["offset"], init_response["prev_page"]["offset"]
             else:
                 logger.error(
@@ -88,7 +84,7 @@ async def init_feed(session):
             await asyncio.sleep(FEED_STEP_INTERVAL)
 
 
-async def crawler(session, **kwargs):
+async def crawler(session, data_handler, **kwargs):
     feed_params = get_feed_params(**kwargs)
     while RUN:
         logger.info(
@@ -109,10 +105,10 @@ async def crawler(session, **kwargs):
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                     continue
                 if response["data"]:
-                    process_items_tasks = (process_tender(session, item) for item in response["data"])
-                    await asyncio.gather(*process_items_tasks)
+                    await data_handler(response["data"])
                     await save_crawler_position(session, response, descending=feed_params["descending"])
                     feed_params.update(offset=response["next_page"]["offset"])
+
                 elif feed_params["descending"]:
                     logger.info("Stop backward crawling", extra={"MESSAGE_ID": "BACK_CRAWLER_STOP"})
                     break  # got all ancient stuff; stop crawling
@@ -144,10 +140,10 @@ async def crawler(session, **kwargs):
     logger.info("Crawler stopped", extra={"FEED_PARAMS": feed_params, "MESSAGE_ID": "CRAWLER_STOPPED"})
 
 
-async def process_tender(session, tender):
+async def process_tender(session, tender_id, process_function):
     while True:
         try:
-            resp = await session.get(f"{BASE_URL}/{tender['id']}")
+            resp = await session.get(f"{BASE_URL}/{tender_id}")
         except aiohttp.ClientError as e:
             logger.warning(f"Tender {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
@@ -159,10 +155,10 @@ async def process_tender(session, tender):
                     logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                 else:
-                    save_complaint_tasks = [save_complaint_data(c) for c in get_complaint_data(response["data"])]
-                    return await asyncio.gather(*save_complaint_tasks)
+                    return await process_function(response["data"])
             elif resp.status == 429:
-                logger.warning("Too many requests while getting tender", extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
+                logger.warning("Too many requests while getting tender",
+                               extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
                 await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
             else:
                 return logger.error(
@@ -212,12 +208,20 @@ def get_stop_signal_handler(sig):
     return handler
 
 
-if __name__ == '__main__':
+def main(data_handler, init_task=None):
     signal.signal(signal.SIGINT, get_stop_signal_handler("SIGINT"))
     signal.signal(signal.SIGTERM, get_stop_signal_handler("SIGTERM"))
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(run_app(data_handler, init_task=init_task))
     # Wait 250 ms for the underlying SSL connections to close
     loop.run_until_complete(asyncio.sleep(0.250))
     loop.close()
+
+
+async def dummy_data_handler(items):
+    for item in items:
+        logger.info(f"Processing {item['id']}")
+
+if __name__ == '__main__':
+    main(dummy_data_handler)
