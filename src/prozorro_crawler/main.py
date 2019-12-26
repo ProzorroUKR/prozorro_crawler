@@ -71,7 +71,7 @@ async def init_feed(session, data_handler):
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                     continue
 
-                await data_handler(init_response["data"])
+                await data_handler(session, init_response["data"])
                 return init_response["next_page"]["offset"], init_response["prev_page"]["offset"]
             else:
                 logger.error(
@@ -105,7 +105,7 @@ async def crawler(session, data_handler, **kwargs):
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                     continue
                 if response["data"]:
-                    await data_handler(response["data"])
+                    await data_handler(session, response["data"])
                     await save_crawler_position(session, response, descending=feed_params["descending"])
                     feed_params.update(offset=response["next_page"]["offset"])
 
@@ -155,7 +155,7 @@ async def process_tender(session, tender_id, process_function):
                     logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                 else:
-                    return await process_function(response["data"])
+                    return await process_function(session, response["data"])
             elif resp.status == 429:
                 logger.warning("Too many requests while getting tender",
                                extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
@@ -219,7 +219,7 @@ def main(data_handler, init_task=None):
     loop.close()
 
 
-async def dummy_data_handler(items):
+async def dummy_data_handler(session, items):
     for item in items:
         logger.info(f"Processing {item['id']}")
 

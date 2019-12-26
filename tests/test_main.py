@@ -104,7 +104,7 @@ async def test_init_feed():
 
     assert result == ("b", "f")
     assert sleep_mock.mock_calls == [call(CONNECTION_ERROR_INTERVAL), call(FEED_STEP_INTERVAL)]
-    data_handler.assert_called_once_with(["w", "t", "f"])
+    data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
 
 @pytest.mark.asyncio
@@ -174,7 +174,7 @@ async def test_crawler():
         call(FEED_STEP_INTERVAL),
     ]
     save_crawler_position_mock.assert_called_once_with(session, data, descending="")
-    data_handler.assert_called_once_with(["w", "t", "f"])
+    data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
 
 @pytest.mark.asyncio
@@ -216,7 +216,7 @@ async def test_crawler_few_items():
         call(FEED_STEP_INTERVAL),
     ]
     save_crawler_position_mock.assert_called_once_with(session, data, descending="1")
-    data_handler.assert_called_once_with(["w", "t", "f"])
+    data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
 
 @pytest.mark.asyncio
@@ -292,7 +292,7 @@ async def test_process_tender():
     assert session.get.mock_calls == [
         call(BASE_URL + "/abc")
     ] * 3
-    process_function.assert_called_once_with(data["data"])
+    process_function.assert_called_once_with(session, data["data"])
 
 
 @pytest.mark.asyncio
