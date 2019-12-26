@@ -21,16 +21,6 @@ API_MODE = os.environ.get("API_MODE", "_all_")
 API_OPT_FIELDS = os.environ.get("API_OPT_FIELDS", "").split(",")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}/tenders"
 
-STORE_CLAIMS = os.environ.get("STORE_CLAIMS")
-STORE_DRAFTS = os.environ.get("STORE_DRAFTS")
-STORE_WO_DATE = os.environ.get("STORE_WO_DATE")
-
-TENDER_FIELDS = os.environ.get(
-    "TENDER_FIELDS",
-    "id,status,procurementMethod,procurementMethodType,dateModified,mode"
-).split(",")
-LOT_FIELDS = os.environ.get("LOT_FIELDS", "id,status").split(",")
-
 MONGODB_URL = os.environ.get("MONGODB_URL", "mongodb://root:example@mongo:27017")
 MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "prozorro-crawler")
 MONGODB_COLLECTION = os.environ.get("MONGODB_COLLECTION", "complaints")
