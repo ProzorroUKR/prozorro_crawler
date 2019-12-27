@@ -1,5 +1,5 @@
 from prozorro_crawler.main import main, run_app, init_feed, process_tender, crawler, save_crawler_position
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, Mock, patch, call
 from prozorro_crawler.settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
     NO_ITEMS_INTERVAL, BASE_URL
@@ -14,15 +14,16 @@ import pytest
 async def test_main_function():
     data_handler = AsyncMock()
     init_task = AsyncMock()
+    headers = {1: 2, 3: "4"}
     loop = MagicMock()
     with patch("prozorro_crawler.main.asyncio.get_event_loop", lambda: loop):
         with patch("prozorro_crawler.main.run_app", MagicMock()) as run_app_mock:
             with patch("prozorro_crawler.main.asyncio.sleep", MagicMock()) as sleep_mock:
-                main(data_handler, init_task)
+                main(data_handler, init_task, additional_headers=headers)
 
-    run_app_mock.assert_called_once_with(data_handler, init_task=init_task)
+    run_app_mock.assert_called_once_with(data_handler, init_task=init_task, additional_headers=headers)
     assert loop.run_until_complete.mock_calls == [
-        call(run_app_mock(data_handler, init_task=init_task)),
+        call(run_app_mock(data_handler, init_task=init_task, additional_headers=headers)),
         call(sleep_mock(0.250)),
     ]
 
@@ -36,20 +37,23 @@ async def test_run_app_saved_feed():
     }
     data_handler = AsyncMock()
     prepare_storage = AsyncMock()
+    additional_headers = {"User-Agent": "Safari", "Auth": "Token"}
     with patch("prozorro_crawler.main.get_feed_position",
                AsyncMock(side_effect=[saved_feed_position, StopAsyncIteration])):
 
         session = AsyncMock()
         session.cookie_jar.update_cookies = MagicMock()
         with patch("prozorro_crawler.main.aiohttp.ClientSession",
-                   MagicMock(return_value=session)) as client_mock:
+                   Mock(return_value=session)) as client_mock:
             with patch("prozorro_crawler.main.crawler", AsyncMock()) as crawler_mock:
                 try:
-                    await run_app(data_handler, prepare_storage)
+                    await run_app(data_handler, prepare_storage, additional_headers)
                 except StopAsyncIteration:
                     pass
 
     prepare_storage.assert_called_once()
+    _, client_call_kwargs = client_mock.call_args
+    assert client_call_kwargs.get("headers") == additional_headers
     session = client_mock.return_value
     assert crawler_mock.mock_calls == [
         call(session, data_handler, offset="f"),

@@ -13,7 +13,7 @@ import signal
 RUN = True
 
 
-async def run_app(data_handler, init_task=None):
+async def run_app(data_handler, init_task=None, additional_headers=None):
 
     if init_task is not None:
         await init_task()
@@ -21,6 +21,8 @@ async def run_app(data_handler, init_task=None):
     logger.info(f"Start crawling {BASE_URL}", extra={"MESSAGE_ID": "START_CRAWLING"})
     conn = aiohttp.TCPConnector(ttl_dns_cache=300)
     headers = {"User-Agent": "ProZorro Crawler 2.0"}
+    if isinstance(additional_headers, dict):
+        headers.update(additional_headers)
     async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
         while RUN:
             """
@@ -208,12 +210,12 @@ def get_stop_signal_handler(sig):
     return handler
 
 
-def main(data_handler, init_task=None):
+def main(data_handler, init_task=None, additional_headers=None):
     signal.signal(signal.SIGINT, get_stop_signal_handler("SIGINT"))
     signal.signal(signal.SIGTERM, get_stop_signal_handler("SIGTERM"))
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_app(data_handler, init_task=init_task))
+    loop.run_until_complete(run_app(data_handler, init_task=init_task, additional_headers=additional_headers))
     # Wait 250 ms for the underlying SSL connections to close
     loop.run_until_complete(asyncio.sleep(0.250))
     loop.close()
