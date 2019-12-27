@@ -1,4 +1,7 @@
-from prozorro_crawler.main import main, run_app, init_feed, process_tender, crawler, save_crawler_position
+from prozorro_crawler.main import (
+    main, run_app, init_feed, process_tender,
+    get_response_data, crawler, save_crawler_position
+)
 from unittest.mock import MagicMock, Mock, patch, call
 from prozorro_crawler.settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
@@ -273,6 +276,18 @@ async def test_crawler_payload_error():
 async def test_process_tender():
     process_function = AsyncMock()
     session = MagicMock()
+    data = {"something": "hello"}
+    with patch("prozorro_crawler.main.get_response_data",
+               AsyncMock(return_value=data)) as get_response_data_mock:
+        await process_tender(session, "abc", process_function)
+
+    get_response_data_mock.assert_called_once_with(session, f"{BASE_URL}/abc")
+    process_function.assert_called_once_with(session, data)
+
+
+@pytest.mark.asyncio
+async def test_get_response_data():
+    session = MagicMock()
     data = {"data": "hello"}
     response = MagicMock(
         status=200,
@@ -287,34 +302,34 @@ async def test_process_tender():
     ])
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-        await process_tender(session, "abc", process_function)
+        result = await get_response_data(session, "/abc")
 
+    assert result == "hello"
     assert sleep_mock.mock_calls == [
         call(CONNECTION_ERROR_INTERVAL),
         call(TOO_MANY_REQUESTS_INTERVAL),
     ]
     assert session.get.mock_calls == [
-        call(BASE_URL + "/abc")
+        call("/abc")
     ] * 3
-    process_function.assert_called_once_with(session, data["data"])
 
 
 @pytest.mark.asyncio
-async def test_process_tender_error():
+async def test_get_response_data_error():
     process_function = AsyncMock()
     session = MagicMock()
     session.get = AsyncMock(side_effect=[
         MagicMock(status=404, text=AsyncMock(return_value="Not found")),
     ])
 
-    await process_tender(session, "abc", process_function)
+    await get_response_data(session, "/abc")
 
-    session.get.assert_called_once_with(BASE_URL + "/abc")
+    session.get.assert_called_once_with("/abc")
     process_function.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_process_tender_payload_error():
+async def test_get_response_data_payload_error():
     process_function = AsyncMock()
     session = MagicMock()
     session.get = AsyncMock(side_effect=[
@@ -331,7 +346,7 @@ async def test_process_tender_payload_error():
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
         try:
-            await process_tender(session, "abc", process_function)
+            await get_response_data(session, "/abc")
         except StopAsyncIteration:
             pass
 

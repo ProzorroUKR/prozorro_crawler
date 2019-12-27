@@ -142,12 +142,18 @@ async def crawler(session, data_handler, **kwargs):
     logger.info("Crawler stopped", extra={"FEED_PARAMS": feed_params, "MESSAGE_ID": "CRAWLER_STOPPED"})
 
 
-async def process_tender(session, tender_id, process_function=None, url_suffix=""):
+async def process_tender(session, tender_id, process_function):
+    url = f"{BASE_URL}/{tender_id}"
+    data = await get_response_data(session, url)
+    return await process_function(session, data)
+
+
+async def get_response_data(session, url):
     while True:
         try:
-            resp = await session.get(f"{BASE_URL}/{tender_id}{url_suffix}")
+            resp = await session.get(url)
         except aiohttp.ClientError as e:
-            logger.warning(f"Tender {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(f"Error from {url} {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
@@ -157,8 +163,6 @@ async def process_tender(session, tender_id, process_function=None, url_suffix="
                     logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                 else:
-                    if process_function is not None:
-                        return await process_function(session, response["data"])
                     return response["data"]
             elif resp.status == 429:
                 logger.warning("Too many requests while getting tender",
@@ -170,7 +174,7 @@ async def process_tender(session, tender_id, process_function=None, url_suffix="
                         resp.status,
                         await resp.text()
                     ),
-                    extra={"MESSAGE_ID": "TENDER_UNEXPECTED_ERROR"}
+                    extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
                 )
 
 
