@@ -5,7 +5,7 @@ from prozorro_crawler.main import (
 from unittest.mock import MagicMock, Mock, patch, call
 from prozorro_crawler.settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
-    NO_ITEMS_INTERVAL, BASE_URL
+    NO_ITEMS_INTERVAL, BASE_URL, GET_ERROR_RETRIES
 )
 from json.decoder import JSONDecodeError
 from .base import AsyncMock
@@ -318,14 +318,19 @@ async def test_get_response_data():
 async def test_get_response_data_error():
     process_function = AsyncMock()
     session = MagicMock()
-    session.get = AsyncMock(side_effect=[
-        MagicMock(status=404, text=AsyncMock(return_value="Not found")),
-    ])
+    session.get = AsyncMock(return_value=MagicMock(status=404, text=AsyncMock(return_value="Not found")))
 
-    await get_response_data(session, "/abc")
+    with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
+        await get_response_data(session, "/abc")
 
-    session.get.assert_called_once_with("/abc")
+    assert session.get.mock_calls == [
+        call("/abc")
+    ] * GET_ERROR_RETRIES
+
     process_function.assert_not_called()
+    assert sleep_mock.mock_calls == [
+        call(CONNECTION_ERROR_INTERVAL),
+    ] * (GET_ERROR_RETRIES - 1)
 
 
 @pytest.mark.asyncio

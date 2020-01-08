@@ -3,6 +3,7 @@ from prozorro_crawler.storage import get_feed_position, drop_feed_position, save
 from prozorro_crawler.settings import (
     logger, BASE_URL, PUBLIC_API_HOST, API_LIMIT, API_OPT_FIELDS, API_MODE,
     CONNECTION_ERROR_INTERVAL, FEED_STEP_INTERVAL, NO_ITEMS_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
+    GET_ERROR_RETRIES,
 )
 from json.decoder import JSONDecodeError
 import aiohttp
@@ -148,7 +149,7 @@ async def process_tender(session, tender_id, process_function):
     return await process_function(session, data)
 
 
-async def get_response_data(session, url):
+async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
     while True:
         try:
             resp = await session.get(url)
@@ -169,13 +170,24 @@ async def get_response_data(session, url):
                                extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
                 await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
             else:
-                return logger.error(
-                    "Error on getting tender: {} {}".format(
-                        resp.status,
-                        await resp.text()
-                    ),
-                    extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
-                )
+                if error_retries > 1:
+                    logger.warning(
+                        "Error on getting tender: {} {}".format(
+                            resp.status,
+                            await resp.text()
+                        ),
+                        extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
+                    )
+                    error_retries -= 1
+                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+                else:
+                    return logger.error(
+                        "Error on getting tender: {} {}".format(
+                            resp.status,
+                            await resp.text()
+                        ),
+                        extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
+                    )
 
 
 def get_feed_params(**kwargs):

@@ -10,6 +10,7 @@ FEED_STEP_INTERVAL = int(os.environ.get("FEED_STEP_INTERVAL", 0))
 TOO_MANY_REQUESTS_INTERVAL = int(os.environ.get("TOO_MANY_REQUESTS_INTERVAL", 10))
 CONNECTION_ERROR_INTERVAL = int(os.environ.get("CONNECTION_ERROR_INTERVAL", 5))
 NO_ITEMS_INTERVAL = int(os.environ.get("CONNECTION_ERROR_INTERVAL", 15))
+GET_ERROR_RETRIES = int(os.environ.get("GET_ERROR_RETRIES", 5))
 
 LOGGER_NAME = os.environ.get("LOGGER_NAME", "PRO-ZORRO-CRAWLER")
 PUBLIC_API_HOST = os.environ.get("PUBLIC_API_HOST", "https://public-api-sandbox.prozorro.gov.ua")
