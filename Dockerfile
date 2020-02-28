@@ -1,4 +1,4 @@
-FROM python:3.7-slim
+FROM python:3.6-slim
 RUN mkdir /app
 WORKDIR /app
 ADD requirements.txt /app/

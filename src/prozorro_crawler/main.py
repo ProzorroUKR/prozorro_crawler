@@ -90,9 +90,12 @@ async def init_feed(session, data_handler):
 async def crawler(session, data_handler, **kwargs):
     feed_params = get_feed_params(**kwargs)
     while RUN:
-        logger.info(
+        logger.debug(
             f"Feed request: {feed_params}",
-            extra={"TASKS_LEN": len(asyncio.all_tasks()), "MESSAGE_ID": "FEED_REQUEST"}
+            extra={
+                # "TASKS_LEN": len(asyncio.all_tasks()), this requires python 3.7
+                "MESSAGE_ID": "FEED_REQUEST"
+            }
         )
         try:
             resp = await session.get(BASE_URL, params=feed_params)
