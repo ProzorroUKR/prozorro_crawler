@@ -199,7 +199,7 @@ def get_feed_params(**kwargs):
         descending="",
         offset="",
         limit=API_LIMIT,
-        opt_fields="%2C".join(API_OPT_FIELDS),
+        opt_fields=",".join(API_OPT_FIELDS),
         mode=API_MODE,
     )
     feed_params.update(kwargs)
