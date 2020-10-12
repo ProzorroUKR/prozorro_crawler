@@ -41,3 +41,14 @@ formatter = jsonlogger.JsonFormatter(
 )
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
+
+
+# lock
+LOCK_ENABLED = bool(os.environ.get("LOCK_ENABLED", False))
+LOCK_COLLECTION_NAME = os.environ.get("LOCK_COLLECTION_NAME", "process_lock")
+LOCK_EXPIRE_TIME = int(os.environ.get("LOCK_EXPIRE_TIME", 60))
+LOCK_UPDATE_TIME = int(os.environ.get("LOCK_UPDATE_TIME", 30))
+LOCK_ACQUIRE_INTERVAL = int(os.environ.get("LOCK_ACQUIRE_INTERVAL", 10))
+# if you use one MONGODB_DATABASE for many crawlers,
+# better rename to a specific process, in order different crawlers don't clash
+LOCK_PROCESS_NAME = os.environ.get("LOCK_PROCESS_NAME", "crawler_lock")

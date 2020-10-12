@@ -20,13 +20,13 @@ async def test_main_function():
     headers = {1: 2, 3: "4"}
     loop = MagicMock()
     with patch("prozorro_crawler.main.asyncio.get_event_loop", lambda: loop):
-        with patch("prozorro_crawler.main.run_app", MagicMock()) as run_app_mock:
+        with patch("prozorro_crawler.main.Lock", MagicMock()) as lock_mock:
             with patch("prozorro_crawler.main.asyncio.sleep", MagicMock()) as sleep_mock:
                 main(data_handler, init_task, additional_headers=headers)
 
-    run_app_mock.assert_called_once_with(data_handler, init_task=init_task, additional_headers=headers)
+    lock_mock.run_locked.assert_called_once()
     assert loop.run_until_complete.mock_calls == [
-        call(run_app_mock(data_handler, init_task=init_task, additional_headers=headers)),
+        call(lock_mock.run_locked.return_value),
         call(sleep_mock(0.250)),
     ]
 

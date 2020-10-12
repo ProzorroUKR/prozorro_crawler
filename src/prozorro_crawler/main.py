@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from prozorro_crawler.lock import Lock
 from prozorro_crawler.storage import get_feed_position, drop_feed_position, save_feed_position
 from prozorro_crawler.settings import (
     logger, BASE_URL, PUBLIC_API_HOST, API_LIMIT, API_OPT_FIELDS, API_MODE,
@@ -12,6 +13,10 @@ import signal
 
 
 RUN = True
+
+
+def should_run():
+    return RUN
 
 
 async def run_app(data_handler, init_task=None, additional_headers=None):
@@ -48,12 +53,6 @@ async def run_app(data_handler, init_task=None, additional_headers=None):
                 crawler(session, data_handler, offset=forward_offset),
                 crawler(session, data_handler, offset=backward_offset, descending="1"),  # backward crawler
             )
-
-        # we actually don't need this, as crawlers await their tasks now, but just in case
-        pending_tasks = asyncio.all_tasks() - {asyncio.current_task()}
-        logger.info("Waiting for tasks to finish",
-                    extra={"AWAIT_PENDING_TASKS": len(pending_tasks), "MESSAGE_ID": "AWAIT_TASKS_ON_STOP"})
-        await asyncio.gather(*pending_tasks)
 
 
 async def init_feed(session, data_handler):
@@ -236,7 +235,18 @@ def main(data_handler, init_task=None, additional_headers=None):
     signal.signal(signal.SIGTERM, get_stop_signal_handler("SIGTERM"))
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_app(data_handler, init_task=init_task, additional_headers=additional_headers))
+
+    def get_app():
+        app = run_app(
+            data_handler,
+            init_task=init_task,
+            additional_headers=additional_headers
+        )
+        return app
+
+    loop.run_until_complete(
+        Lock.run_locked(get_app, should_run)
+    )
     # Wait 250 ms for the underlying SSL connections to close
     loop.run_until_complete(asyncio.sleep(0.250))
     loop.close()
@@ -245,6 +255,7 @@ def main(data_handler, init_task=None, additional_headers=None):
 async def dummy_data_handler(session, items):
     for item in items:
         logger.info(f"Processing {item['id']}")
+        await asyncio.sleep(1)
 
 if __name__ == '__main__':
     main(dummy_data_handler)
