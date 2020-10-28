@@ -23,9 +23,37 @@ services:
     logging:
       driver: "none"
 
-  crawler:
+  crawler_1:
     build: .
     environment:
+      - LOCK_ENABLED=yep
+      - API_LIMIT=5
+      - MONGODB_URL=mongodb://root:example@mongo:27017
+      - PYTHONUNBUFFERED=1
+      - PUBLIC_API_HOST=https://public-api-sandbox.prozorro.gov.ua
+    volumes:
+      - ./src:/app
+    depends_on:
+      - mongo
+
+  crawler_2:
+    build: .
+    environment:
+      - LOCK_ENABLED=yep
+      - API_LIMIT=5
+      - MONGODB_URL=mongodb://root:example@mongo:27017
+      - PYTHONUNBUFFERED=1
+      - PUBLIC_API_HOST=https://public-api-sandbox.prozorro.gov.ua
+    volumes:
+      - ./src:/app
+    depends_on:
+      - mongo
+
+  crawler_3:
+    build: .
+    environment:
+      - LOCK_ENABLED=yep
+      - API_LIMIT=5
       - MONGODB_URL=mongodb://root:example@mongo:27017
       - PYTHONUNBUFFERED=1
       - PUBLIC_API_HOST=https://public-api-sandbox.prozorro.gov.ua
