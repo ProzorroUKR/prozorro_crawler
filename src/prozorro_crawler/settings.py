@@ -20,7 +20,8 @@ API_VERSION = os.environ.get("API_VERSION", "2.5")
 API_LIMIT = int(os.environ.get("API_LIMIT", 100))
 API_MODE = os.environ.get("API_MODE", "_all_")
 API_OPT_FIELDS = os.environ.get("API_OPT_FIELDS", "").split(",")
-BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}/tenders"
+API_RESOURCE = os.environ.get("API_RESOURCE", "tenders")
+BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
 MONGODB_URL = os.environ.get("MONGODB_URL", "mongodb://root:example@mongo:27017")
 MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "prozorro-crawler")

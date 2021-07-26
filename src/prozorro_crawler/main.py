@@ -1,10 +1,25 @@
 # -*- coding: utf-8 -*-
+import warnings
+
 from prozorro_crawler.lock import Lock
-from prozorro_crawler.storage import get_feed_position, drop_feed_position, save_feed_position
+from prozorro_crawler.storage import (
+    get_feed_position,
+    drop_feed_position,
+    save_feed_position,
+)
 from prozorro_crawler.settings import (
-    logger, BASE_URL, PUBLIC_API_HOST, API_LIMIT, API_OPT_FIELDS, API_MODE,
-    CONNECTION_ERROR_INTERVAL, FEED_STEP_INTERVAL, NO_ITEMS_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
+    logger,
+    BASE_URL,
+    PUBLIC_API_HOST,
+    API_LIMIT,
+    API_OPT_FIELDS,
+    API_MODE,
+    CONNECTION_ERROR_INTERVAL,
+    FEED_STEP_INTERVAL,
+    NO_ITEMS_INTERVAL,
+    TOO_MANY_REQUESTS_INTERVAL,
     GET_ERROR_RETRIES,
+    API_RESOURCE,
 )
 from json.decoder import JSONDecodeError
 import aiohttp
@@ -19,12 +34,23 @@ def should_run():
     return RUN
 
 
-async def run_app(data_handler, init_task=None, additional_headers=None):
+async def run_app(
+    data_handler,
+    init_task=None,
+    additional_headers=None,
+    resource=API_RESOURCE,
+    opt_fields=API_OPT_FIELDS,
+):
 
     if init_task is not None:
         await init_task()
 
-    logger.info(f"Start crawling {BASE_URL}", extra={"MESSAGE_ID": "START_CRAWLING"})
+    url = f"{BASE_URL}/{resource}"
+    kwargs = dict(
+        opt_fields=opt_fields,
+    )
+
+    logger.info(f"Start crawling {url}", extra={"MESSAGE_ID": "START_CRAWLING"})
     conn = aiohttp.TCPConnector(ttl_dns_cache=300)
     headers = {"User-Agent": "ProZorro Crawler 2.0"}
     if isinstance(additional_headers, dict):
@@ -38,31 +64,55 @@ async def run_app(data_handler, init_task=None, additional_headers=None):
             in this case the whole process should be reinitialized
             """
             feed_position = await get_feed_position()
-            if feed_position and "backward_offset" in feed_position and "forward_offset" in feed_position:
-                logger.info(f"Start from saved position: {feed_position}",
-                            extra={"MESSAGE_ID": "LOAD_CRAWLER_POSITION"})
+            if (
+                feed_position
+                and "backward_offset" in feed_position
+                and "forward_offset" in feed_position
+            ):
+                logger.info(
+                    f"Start from saved position: {feed_position}",
+                    extra={"MESSAGE_ID": "LOAD_CRAWLER_POSITION"}
+                )
                 forward_offset = feed_position["forward_offset"]
                 backward_offset = feed_position["backward_offset"]
                 server_id = feed_position.get("server_id")
                 if server_id:
                     session.cookie_jar.update_cookies({"SERVER_ID": server_id})
             else:
-                backward_offset, forward_offset = await init_feed(session, data_handler)
+                backward_offset, forward_offset = await init_feed(
+                    session, url, data_handler, **kwargs
+                )
 
             await asyncio.gather(
-                crawler(session, data_handler, offset=forward_offset),
-                crawler(session, data_handler, offset=backward_offset, descending="1"),  # backward crawler
+                crawler(
+                    session,
+                    url,
+                    data_handler,
+                    offset=forward_offset,
+                    **kwargs,
+                ),
+                crawler(
+                    session,
+                    url,
+                    data_handler,
+                    offset=backward_offset,
+                    descending="1",
+                    **kwargs,
+                ),  # backward crawler
             )
 
 
-async def init_feed(session, data_handler):
-    feed_params = get_feed_params(descending="1")
+async def init_feed(session, url, data_handler, **kwargs):
+    feed_params = get_feed_params(descending="1", **kwargs)
     logger.info("Crawler initialization", extra={"MESSAGE_ID": "CRAWLER_INIT"})
     while True:
         try:
-            resp = await session.get(BASE_URL, params=feed_params)
+            resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
-            logger.warning(f"Init feed {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(
+                f"Init feed {type(e)}: {e}",
+                extra={"MESSAGE_ID": "HTTP_EXCEPTION"}
+            )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
@@ -86,7 +136,7 @@ async def init_feed(session, data_handler):
             await asyncio.sleep(FEED_STEP_INTERVAL)
 
 
-async def crawler(session, data_handler, **kwargs):
+async def crawler(session, url, data_handler, **kwargs):
     feed_params = get_feed_params(**kwargs)
     while RUN:
         logger.debug(
@@ -97,9 +147,12 @@ async def crawler(session, data_handler, **kwargs):
             }
         )
         try:
-            resp = await session.get(BASE_URL, params=feed_params)
+            resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
-            logger.warning(f"Crawler {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(
+                f"Crawler {type(e)}: {e}",
+                extra={"MESSAGE_ID": "HTTP_EXCEPTION"}
+            )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
@@ -111,25 +164,39 @@ async def crawler(session, data_handler, **kwargs):
                     continue
                 if response["data"]:
                     await data_handler(session, response["data"])
-                    await save_crawler_position(session, response, descending=feed_params["descending"])
+                    await save_crawler_position(
+                        session, response, descending=feed_params["descending"]
+                    )
                     feed_params.update(offset=response["next_page"]["offset"])
 
                 elif feed_params["descending"]:
-                    logger.info("Stop backward crawling", extra={"MESSAGE_ID": "BACK_CRAWLER_STOP"})
+                    logger.info(
+                        "Stop backward crawling",
+                        extra={"MESSAGE_ID": "BACK_CRAWLER_STOP"}
+                    )
                     break  # got all ancient stuff; stop crawling
 
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
 
             elif resp.status == 429:
-                logger.warning("Too many requests while getting feed", extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
+                logger.warning(
+                    "Too many requests while getting feed",
+                    extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"}
+                )
                 await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
 
             elif resp.status == 412:
-                logger.warning("Precondition failed", extra={"MESSAGE_ID": "PRECONDITION_FAILED"})
+                logger.warning(
+                    "Precondition failed",
+                    extra={"MESSAGE_ID": "PRECONDITION_FAILED"}
+                )
 
             elif resp.status == 404:
-                logger.error("Offset expired/invalid", extra={"MESSAGE_ID": "OFFSET_INVALID"})
+                logger.error(
+                    "Offset expired/invalid",
+                    extra={"MESSAGE_ID": "OFFSET_INVALID"}
+                )
                 await drop_feed_position()
                 break  # stop crawling
             else:
@@ -142,13 +209,25 @@ async def crawler(session, data_handler, **kwargs):
                 )
             await asyncio.sleep(FEED_STEP_INTERVAL)
 
-    logger.info("Crawler stopped", extra={"FEED_PARAMS": feed_params, "MESSAGE_ID": "CRAWLER_STOPPED"})
+    logger.info(
+        "Crawler stopped",
+        extra={"FEED_PARAMS": feed_params, "MESSAGE_ID": "CRAWLER_STOPPED"}
+    )
+
+
+async def process_resource(session, url, resource_id, process_function):
+    resource_url = f"{url}/{resource_id}"
+    data = await get_response_data(session, resource_url)
+    return await process_function(session, data)
 
 
 async def process_tender(session, tender_id, process_function):
-    url = f"{BASE_URL}/{tender_id}"
-    data = await get_response_data(session, url)
-    return await process_function(session, data)
+    warnings.warn(
+        "process_tender is deprecated, use process_resource instead",
+        DeprecationWarning
+    )
+    resource_url = f"{BASE_URL}/tenders/{tender_id}"
+    return await process_resource(session, resource_url, tender_id, process_function)
 
 
 async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
@@ -156,7 +235,10 @@ async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
         try:
             resp = await session.get(url)
         except aiohttp.ClientError as e:
-            logger.warning(f"Error from {url} {type(e)}: {e}", extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            logger.warning(
+                f"Error from {url} {type(e)}: {e}",
+                extra={"MESSAGE_ID": "HTTP_EXCEPTION"}
+            )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
         else:
             if resp.status == 200:
@@ -168,8 +250,10 @@ async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
                 else:
                     return response["data"]
             elif resp.status == 429:
-                logger.warning("Too many requests while getting tender",
-                               extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"})
+                logger.warning(
+                    "Too many requests while getting tender",
+                    extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"}
+                )
                 await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
             else:
                 if error_retries > 1:
@@ -206,14 +290,14 @@ def get_feed_params(**kwargs):
 
 
 async def save_crawler_position(session, response, descending=False):
-    data = {
-       "backward_offset" if descending else "forward_offset": response["next_page"]["offset"]
-    }
+    data = {}
+
+    offset_key = "backward_offset" if descending else "forward_offset"
+    data[offset_key] = response["next_page"]["offset"]
+
     if response["data"]:
-        if descending:
-            data["earliest_date_modified"] = response["data"][-1]["dateModified"]
-        else:
-            data["latest_date_modified"] = response["data"][-1]["dateModified"]
+        date_modified_key = "earliest_date_modified" if descending else "latest_date_modified"
+        data[date_modified_key] = response["data"][-1]["dateModified"]
 
     filtered = session.cookie_jar.filter_cookies(PUBLIC_API_HOST)
     server_id = filtered.get("SERVER_ID")
@@ -225,12 +309,21 @@ async def save_crawler_position(session, response, descending=False):
 def get_stop_signal_handler(sig):
     def handler(signum, frame):
         global RUN
-        logger.warning(f"Handling {sig} signal: stopping crawlers", extra={"MESSAGE_ID": "HANDLE_STOP_SIG"})
+        logger.warning(
+            f"Handling {sig} signal: stopping crawlers",
+            extra={"MESSAGE_ID": "HANDLE_STOP_SIG"}
+        )
         RUN = False
     return handler
 
 
-def main(data_handler, init_task=None, additional_headers=None):
+def main(
+    data_handler,
+    init_task=None,
+    additional_headers=None,
+    resource=API_RESOURCE,
+    opt_fields=API_OPT_FIELDS,
+):
     signal.signal(signal.SIGINT, get_stop_signal_handler("SIGINT"))
     signal.signal(signal.SIGTERM, get_stop_signal_handler("SIGTERM"))
 
@@ -239,8 +332,10 @@ def main(data_handler, init_task=None, additional_headers=None):
     def get_app():
         app = run_app(
             data_handler,
+            resource=resource,
+            opt_fields=opt_fields,
             init_task=init_task,
-            additional_headers=additional_headers
+            additional_headers=additional_headers,
         )
         return app
 
