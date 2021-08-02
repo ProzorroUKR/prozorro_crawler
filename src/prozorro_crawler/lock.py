@@ -31,7 +31,7 @@ class Lock:
 
     def __init__(self):
         self.id = uuid4().hex
-        logger.info(f"Lock initialized: {self.id}")
+        logger.info(f"Lock {LOCK_PROCESS_NAME} {self.id} initialized")
 
     async def acquire(self, should_run):
         """
@@ -83,8 +83,12 @@ class Lock:
                 logger.warning(e)
                 await sleep(MONGODB_ERROR_INTERVAL)
             else:
-                logger.info(f"Updated lock {LOCK_PROCESS_NAME} #{self.id}: "
-                            f"{result.acknowledged} {result.modified_count} {result.upserted_id}")
+                logger.info(
+                    f"Updated lock {LOCK_PROCESS_NAME} #{self.id}: "
+                    f"acknowledged={result.acknowledged} "
+                    f"modified_count={result.modified_count} "
+                    f"upserted_id={result.upserted_id}"
+                )
                 await sleep(LOCK_UPDATE_TIME)
 
     async def release(self):
@@ -98,7 +102,10 @@ class Lock:
         except PyMongoError as e:
             logger.exception(e)
         else:
-            logger.info(f"Deleted lock {LOCK_PROCESS_NAME} #{self.id}: {result.deleted_count}")
+            logger.info(
+                f"Deleted lock {LOCK_PROCESS_NAME} #{self.id}: "
+                f"deleted_count={result.deleted_count}"
+            )
 
     # task wrapper
     @classmethod
