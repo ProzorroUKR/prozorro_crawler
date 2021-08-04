@@ -1,10 +1,15 @@
 from prozorro_crawler.storage import (
-    get_mongodb_collection, save_feed_position, get_feed_position, drop_feed_position,
+    get_mongodb_collection,
+    save_feed_position,
+    get_feed_position,
+    drop_feed_position,
 )
 from pymongo.errors import ServerSelectionTimeoutError
 from unittest.mock import MagicMock, patch, call
 from prozorro_crawler.settings import (
-    MONGODB_DATABASE, MONGODB_COLLECTION, MONGODB_ERROR_INTERVAL, MONGODB_STATE_ID
+    MONGODB_DATABASE,
+    MONGODB_ERROR_INTERVAL,
+    MONGODB_STATE_ID,
 )
 from .base import AsyncMock
 import unittest
@@ -14,22 +19,10 @@ import pytest
 class GetCollectionTestCase(unittest.TestCase):
 
     @patch("prozorro_crawler.storage.AsyncIOMotorClient")
-    def test_get_mongodb_collection(self, motor_client):
-        database = MagicMock()
-        setattr(database, MONGODB_COLLECTION, "hi, c3")
-        client = MagicMock()
-        setattr(client, MONGODB_DATABASE, database)
-        motor_client.return_value = client
-
-        collection = get_mongodb_collection()
-        self.assertEqual(collection, "hi, c3")
-
-    @patch("prozorro_crawler.storage.AsyncIOMotorClient")
     def test_get_mongodb_custom_collection(self, motor_client):
         collection = "my_collection"
 
         database = MagicMock()
-        setattr(database, MONGODB_COLLECTION, "hi, c3")
         setattr(database, collection, "hi, r2")
         client = MagicMock()
         setattr(client, MONGODB_DATABASE, database)

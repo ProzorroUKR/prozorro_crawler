@@ -1,14 +1,17 @@
 from pymongo.errors import PyMongoError
 from motor.motor_asyncio import AsyncIOMotorClient
 from prozorro_crawler.settings import (
-    MONGODB_COLLECTION, MONGODB_URL, MONGODB_DATABASE,
-    MONGODB_STATE_COLLECTION, MONGODB_STATE_ID, MONGODB_ERROR_INTERVAL,
-    logger
+    logger,
+    MONGODB_URL,
+    MONGODB_DATABASE,
+    MONGODB_STATE_COLLECTION,
+    MONGODB_STATE_ID,
+    MONGODB_ERROR_INTERVAL,
 )
 import asyncio
 
 
-def get_mongodb_collection(collection_name=MONGODB_COLLECTION):
+def get_mongodb_collection(collection_name):
     client = AsyncIOMotorClient(MONGODB_URL)
     db = getattr(client, MONGODB_DATABASE)
     collection = getattr(db, collection_name)
