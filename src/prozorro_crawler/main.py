@@ -226,7 +226,7 @@ async def process_tender(session, tender_id, process_function):
         "process_tender is deprecated, use process_resource instead",
         DeprecationWarning
     )
-    resource_url = f"{BASE_URL}/tenders/{tender_id}"
+    resource_url = f"{BASE_URL}/tenders"
     return await process_resource(session, resource_url, tender_id, process_function)
 
 
