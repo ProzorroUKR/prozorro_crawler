@@ -1,7 +1,8 @@
 from prozorro_crawler.main import (
-    main, run_app, init_feed, process_resource,
-    get_response_data, crawler, save_crawler_position
+    main, should_run, run_app,
 )
+from prozorro_crawler.crawler import init_feed, crawler, save_crawler_position
+from prozorro_crawler.resource import process_resource, get_response_data
 from unittest.mock import MagicMock, Mock, patch, call
 from prozorro_crawler.settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
@@ -41,14 +42,15 @@ async def test_run_app_saved_feed():
     data_handler = AsyncMock()
     prepare_storage = AsyncMock()
     additional_headers = {"User-Agent": "Safari", "Auth": "Token"}
-    with patch("prozorro_crawler.main.get_feed_position",
+    with patch("prozorro_crawler.crawler.get_feed_position",
                AsyncMock(side_effect=[saved_feed_position, StopAsyncIteration])):
 
         session = AsyncMock()
         session.cookie_jar.update_cookies = MagicMock()
-        with patch("prozorro_crawler.main.aiohttp.ClientSession",
+        with patch("prozorro_crawler.crawler.aiohttp.ClientSession",
                    Mock(return_value=session)) as client_mock:
-            with patch("prozorro_crawler.main.crawler", AsyncMock()) as crawler_mock:
+            with patch("prozorro_crawler.crawler.crawler",
+                       AsyncMock()) as crawler_mock:
                 try:
                     await run_app(data_handler, prepare_storage, additional_headers)
                 except StopAsyncIteration:
@@ -59,10 +61,25 @@ async def test_run_app_saved_feed():
     assert client_call_kwargs.get("headers") == additional_headers
     session = client_mock.return_value
     url = f"{BASE_URL}/{API_RESOURCE}"
-    opt_fields = API_OPT_FIELDS
+    opt_fields = ",".join(API_OPT_FIELDS)
     assert crawler_mock.mock_calls == [
-        call(session, url, data_handler, offset="f", opt_fields=opt_fields),
-        call(session, url, data_handler, offset="b", descending="1", opt_fields=opt_fields),
+        call(
+            should_run,
+            session,
+            url,
+            data_handler,
+            offset="f",
+            opt_fields=opt_fields
+        ),
+        call(
+            should_run,
+            session,
+            url,
+            data_handler,
+            offset="b",
+            descending="1",
+            opt_fields=opt_fields
+        ),
     ]
     session.cookie_jar.update_cookies.assert_called_once_with({"SERVER_ID": "007"})
 
@@ -70,22 +87,38 @@ async def test_run_app_saved_feed():
 @pytest.mark.asyncio
 async def test_run_app_init_feed():
     data_handler = AsyncMock()
-    with patch("prozorro_crawler.main.get_feed_position",
+    with patch("prozorro_crawler.crawler.get_feed_position",
                AsyncMock(side_effect=[None, StopAsyncIteration])):
-        with patch("prozorro_crawler.main.init_feed", AsyncMock(return_value=("b-2", "f1"))) as init_feed_mock:
-            with patch("prozorro_crawler.main.aiohttp.ClientSession",
+        with patch("prozorro_crawler.crawler.init_feed",
+                   AsyncMock(return_value=("b-2", "f1"))) as init_feed_mock:
+            with patch("prozorro_crawler.crawler.aiohttp.ClientSession",
                        MagicMock(return_value=AsyncMock())) as client_mock:
-                with patch("prozorro_crawler.main.crawler", AsyncMock()) as crawler_mock:
+                with patch("prozorro_crawler.crawler.crawler", AsyncMock()) as crawler_mock:
                     try:
                         await run_app(data_handler)
                     except StopAsyncIteration:
                         pass
     url = f"{BASE_URL}/{API_RESOURCE}"
-    opt_fields = API_OPT_FIELDS
-    init_feed_mock.assert_called_once_with(client_mock.return_value, url, data_handler, opt_fields=opt_fields)
+    opt_fields = ",".join(API_OPT_FIELDS)
+    init_feed_mock.assert_called_once_with(should_run, client_mock.return_value, url, data_handler, opt_fields=opt_fields)
     assert crawler_mock.mock_calls == [
-        call(client_mock.return_value, url, data_handler, offset="f1", opt_fields=opt_fields),
-        call(client_mock.return_value, url, data_handler, offset="b-2", descending="1", opt_fields=opt_fields),
+        call(
+            should_run,
+            client_mock.return_value,
+            url,
+            data_handler,
+            offset="f1",
+            opt_fields=opt_fields
+        ),
+        call(
+            should_run,
+            client_mock.return_value,
+            url,
+            data_handler,
+            offset="b-2",
+            descending="1",
+            opt_fields=opt_fields
+        ),
     ]
 
 
@@ -110,7 +143,7 @@ async def test_init_feed():
     ])
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-        result = await init_feed(session, "url", data_handler)
+        result = await init_feed(should_run, session, "url", data_handler)
 
     assert result == ("b", "f")
     assert sleep_mock.mock_calls == [call(CONNECTION_ERROR_INTERVAL), call(FEED_STEP_INTERVAL)]
@@ -136,7 +169,7 @@ async def test_init_feed_payload_error():
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
         try:
-            await init_feed(session, "url", data_handler)
+            await init_feed(should_run, session, "url", data_handler)
         except StopAsyncIteration:
             pass
 
@@ -168,11 +201,11 @@ async def test_crawler():
         StopAsyncIteration("Exit loop")
     ])
 
-    with patch("prozorro_crawler.main.API_LIMIT", 3):
-        with patch("prozorro_crawler.main.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
+    with patch("prozorro_crawler.crawler.API_LIMIT", 3):
+        with patch("prozorro_crawler.crawler.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
             with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
                 try:
-                    await crawler(session, "url", data_handler)
+                    await crawler(lambda: True, session, "url", data_handler)
                 except StopAsyncIteration:
                     pass
 
@@ -217,9 +250,9 @@ async def test_crawler_few_items():
         empty_response,
     ])
 
-    with patch("prozorro_crawler.main.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
+    with patch("prozorro_crawler.crawler.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
         with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-            await crawler(session, "url", data_handler, descending="1")
+            await crawler(lambda: True, session, "url", data_handler, descending="1")
 
     assert sleep_mock.mock_calls == [
         call(NO_ITEMS_INTERVAL),
@@ -237,9 +270,9 @@ async def test_crawler_404():
         MagicMock(status=404, text=AsyncMock(return_value="Not found")),
     ])
 
-    with patch("prozorro_crawler.main.drop_feed_position", AsyncMock()) as drop_feed_position_mock:
+    with patch("prozorro_crawler.crawler.drop_feed_position", AsyncMock()) as drop_feed_position_mock:
         with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-            await crawler(session, "url", data_handler)
+            await crawler(lambda: True, session, "url", data_handler)
 
     assert sleep_mock.mock_calls == []
     drop_feed_position_mock.assert_called_once()
@@ -264,7 +297,7 @@ async def test_crawler_payload_error():
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
         try:
-            await crawler(session, "url", data_handler)
+            await crawler(lambda: True, session, "url", data_handler)
         except StopAsyncIteration:
             pass
 
@@ -280,7 +313,7 @@ async def test_process_resource():
     process_function = AsyncMock()
     session = MagicMock()
     data = {"something": "hello"}
-    with patch("prozorro_crawler.main.get_response_data",
+    with patch("prozorro_crawler.resource.get_response_data",
                AsyncMock(return_value=data)) as get_response_data_mock:
         await process_resource(session, "url", "abc", process_function)
 
@@ -379,7 +412,7 @@ async def test_save_crawler_position():
             "offset": "001"
         }
     }
-    with patch("prozorro_crawler.main.save_feed_position", AsyncMock()) as save_feed_position_mock:
+    with patch("prozorro_crawler.crawler.save_feed_position", AsyncMock()) as save_feed_position_mock:
         await save_crawler_position(session, response)
 
     save_feed_position_mock.assert_called_once_with(
@@ -405,7 +438,7 @@ async def test_save_backward_crawler_position():
             "offset": "001"
         }
     }
-    with patch("prozorro_crawler.main.save_feed_position", AsyncMock()) as save_feed_position_mock:
+    with patch("prozorro_crawler.crawler.save_feed_position", AsyncMock()) as save_feed_position_mock:
         await save_crawler_position(session, response, descending=True)
 
     save_feed_position_mock.assert_called_once_with(
