@@ -2,7 +2,7 @@ from prozorro_crawler.storage import (
     get_mongodb_collection,
     save_feed_position,
     get_feed_position,
-    drop_feed_position,
+    unset_feed_position,
 )
 from pymongo.errors import ServerSelectionTimeoutError
 from unittest.mock import MagicMock, patch, call
@@ -96,7 +96,7 @@ async def test_drop_feed_position():
             ]
         )
         with patch("prozorro_crawler.storage.asyncio.sleep", AsyncMock()) as sleep_mock:
-            result = await drop_feed_position()
+            result = await unset_feed_position()
 
         assert sleep_mock.mock_calls == [
             call(MONGODB_ERROR_INTERVAL),

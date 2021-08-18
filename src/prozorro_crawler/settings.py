@@ -69,6 +69,8 @@ API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
+DATE_MODIFIED_SKIP_STATUSES = getenv("DATE_MODIFIED_SKIP_STATUSES", "").split(",")
+
 CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
 
 MONGODB_URL = getenv("MONGODB_URL", "mongodb://root:example@mongo:27017")

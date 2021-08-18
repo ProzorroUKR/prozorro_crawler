@@ -11,11 +11,17 @@ from prozorro_crawler.settings import (
     NO_ITEMS_INTERVAL,
     TOO_MANY_REQUESTS_INTERVAL,
     API_MODE,
+    DATE_MODIFIED_SKIP_STATUSES,
 )
 from prozorro_crawler.storage import (
-    drop_feed_position,
+    unset_feed_position,
     save_feed_position,
     get_feed_position,
+    BACKWARD_OFFSET_KEY,
+    FORWARD_OFFSET_KEY,
+    EARLIEST_DATE_MODIFIED_KEY,
+    LATEST_DATE_MODIFIED_KEY,
+    SERVER_ID_KEY,
 )
 from prozorro_crawler.utils import (
     get_session_server_id,
@@ -188,7 +194,7 @@ async def crawler(should_run, session, url, data_handler, **kwargs):
                     "Offset expired/invalid",
                     extra={"MESSAGE_ID": "OFFSET_INVALID"}
                 )
-                await drop_feed_position()
+                await unset_feed_position()
                 break  # stop crawling
             else:
                 logger.error(
@@ -225,12 +231,32 @@ def get_feed_params(**kwargs):
 async def save_crawler_position(session, response, descending=False):
     position_data = {}
 
-    offset_key = "backward_offset" if descending else "forward_offset"
+    # save offset
+    offset_key = BACKWARD_OFFSET_KEY if descending else FORWARD_OFFSET_KEY
     position_data[offset_key] = response["next_page"]["offset"]
 
+    # save date modified
     if response["data"]:
-        date_modified_key = "earliest_date_modified" if descending else "latest_date_modified"
-        position_data[date_modified_key] = response["data"][-1]["dateModified"]
+        if descending:
+            # if descending - last item date modified is earliest date
+            date_modified_key = EARLIEST_DATE_MODIFIED_KEY
+        else:
+            # if not descending - last item date modified is latest date
+            date_modified_key = LATEST_DATE_MODIFIED_KEY
+        # iterate from the end to take last
+        for item in reversed(response["data"]):
+            date_modified = item.get("dateModified")
+            if date_modified:
+                status = item.get("status")
+                # skip statuses where item doesn't change its date modified
+                # so that we skip outdated date modified
+                # Example:
+                # tender doesn't change date modified in active.tendering on bidding
+                if not status or status not in DATE_MODIFIED_SKIP_STATUSES:
+                    position_data[date_modified_key] = date_modified
+                    break
 
-    position_data["server_id"] = get_session_server_id(session)
+    # save server_id
+    position_data[SERVER_ID_KEY] = get_session_server_id(session)
+
     await save_feed_position(position_data)
