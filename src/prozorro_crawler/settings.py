@@ -21,6 +21,17 @@ def warn_mongodb(key, value, default):
             f"in order different crawlers don't clash."
         )
 
+def warn_crawler_user_agent(key, value, default):
+    if value == default:
+        logger.warning(
+            f"Using default '{value}' as crawler user agent. "
+            f"To set another user agent set {key} environment variable."
+        )
+    else:
+        logger.info(
+            f"Using '{value}' as crawler user agent."
+        )
+
 def assert_url(key, value, default):
     assert not value.endswith("/")
     assert value.startswith("http")
@@ -58,7 +69,7 @@ API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
-USER_AGENT = getenv("USER_AGENT", "ProZorro Crawler 2.0")
+CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
 
 MONGODB_URL = getenv("MONGODB_URL", "mongodb://root:example@mongo:27017")
 MONGODB_DATABASE = getenv("MONGODB_DATABASE", "prozorro-crawler")

@@ -1,9 +1,9 @@
-from prozorro_crawler.settings import PUBLIC_API_HOST, USER_AGENT, BASE_URL
+from prozorro_crawler.settings import PUBLIC_API_HOST, CRAWLER_USER_AGENT, BASE_URL
 
 SERVER_ID_COOKIE_NAME = "SERVER_ID"
 
 DEFAULT_HEADERS = {
-    "User-Agent": USER_AGENT
+    "User-Agent": CRAWLER_USER_AGENT
 }
 
 
