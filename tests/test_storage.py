@@ -89,7 +89,7 @@ async def test_get_feed_position():
 async def test_drop_feed_position():
     with patch("prozorro_crawler.storage.get_mongodb_collection", MagicMock()) as collection_mock:
         test_data = {"test": "hi"}
-        collection_mock.return_value.delete_one = AsyncMock(
+        collection_mock.return_value.update_one = AsyncMock(
             side_effect=[
                 ServerSelectionTimeoutError("Oops"),
                 test_data,
@@ -102,7 +102,16 @@ async def test_drop_feed_position():
             call(MONGODB_ERROR_INTERVAL),
         ]
 
-        assert collection_mock.return_value.delete_one.mock_calls == [
-            call({"_id": MONGODB_STATE_ID})
+        assert collection_mock.return_value.update_one.mock_calls == [
+            call(
+                {"_id": MONGODB_STATE_ID},
+                {
+                    "$unset": {
+                        "backward_offset": "",
+                        "forward_offset": "",
+                        "server_id": "",
+                    }
+                }
+            )
         ] * 2
         assert result is test_data

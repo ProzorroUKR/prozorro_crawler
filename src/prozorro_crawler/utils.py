@@ -1,9 +1,15 @@
-from prozorro_crawler.settings import PUBLIC_API_HOST, USER_AGENT, BASE_URL
+from prozorro_crawler.settings import PUBLIC_API_HOST, CRAWLER_USER_AGENT, BASE_URL
+from prozorro_crawler.storage import (
+    BACKWARD_OFFSET_KEY,
+    FORWARD_OFFSET_KEY,
+    EARLIEST_DATE_MODIFIED_KEY,
+    LATEST_DATE_MODIFIED_KEY,
+)
 
 SERVER_ID_COOKIE_NAME = "SERVER_ID"
 
 DEFAULT_HEADERS = {
-    "User-Agent": USER_AGENT
+    "User-Agent": CRAWLER_USER_AGENT
 }
 
 
@@ -23,3 +29,11 @@ def get_session_server_id(session, request_url=PUBLIC_API_HOST):
     server_id_cookie = filtered.get(SERVER_ID_COOKIE_NAME)
     if server_id_cookie:
         return server_id_cookie.value
+
+
+def get_offset_key(descending=False):
+    return BACKWARD_OFFSET_KEY if descending else FORWARD_OFFSET_KEY
+
+
+def get_date_modified_key(descending=False):
+    return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY

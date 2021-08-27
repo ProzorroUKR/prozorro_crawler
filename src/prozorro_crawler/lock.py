@@ -83,7 +83,7 @@ class Lock:
                 logger.warning(e)
                 await sleep(MONGODB_ERROR_INTERVAL)
             else:
-                logger.info(
+                logger.debug(
                     f"Updated lock {LOCK_PROCESS_NAME} #{self.id}: "
                     f"acknowledged={result.acknowledged} "
                     f"modified_count={result.modified_count} "
