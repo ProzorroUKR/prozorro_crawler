@@ -69,6 +69,7 @@ API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
+DATE_MODIFIED_LOCK_ENABLED = bool(getenv("DATE_MODIFIED_LOCK_ENABLED", False))
 DATE_MODIFIED_SKIP_STATUSES = getenv("DATE_MODIFIED_SKIP_STATUSES", "").split(",")
 
 CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)

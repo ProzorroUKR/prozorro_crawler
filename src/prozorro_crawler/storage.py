@@ -16,6 +16,7 @@ FORWARD_OFFSET_KEY = "forward_offset"
 SERVER_ID_KEY = "server_id"
 EARLIEST_DATE_MODIFIED_KEY = "earliest_date_modified"
 LATEST_DATE_MODIFIED_KEY = "latest_date_modified"
+LOCK_DATE_MODIFIED_KEY = "lock_date_modified"
 
 
 def get_mongodb_collection(collection_name):
@@ -49,18 +50,54 @@ async def get_feed_position():
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)
 
 
-async def unset_feed_position():
+async def drop_feed_position():
     collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
     while True:
         try:
             return await collection.update_one(
                 {"_id": MONGODB_STATE_ID},
-                {"$unset": {
-                    BACKWARD_OFFSET_KEY: "",
-                    FORWARD_OFFSET_KEY: "",
-                    SERVER_ID_KEY: "",
-                }}
+                {
+                    "$unset": {
+                        BACKWARD_OFFSET_KEY: "",
+                        FORWARD_OFFSET_KEY: "",
+                        SERVER_ID_KEY: "",
+                    }
+                }
             )
         except PyMongoError as e:
             logger.warning(f"Drop feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
+            await asyncio.sleep(MONGODB_ERROR_INTERVAL)
+
+
+async def lock_feed_position():
+    collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
+    while True:
+        try:
+            return await collection.update_one(
+                {"_id": MONGODB_STATE_ID},
+                {
+                    "$set": {
+                        LOCK_DATE_MODIFIED_KEY: True
+                    }
+                }
+            )
+        except PyMongoError as e:
+            logger.warning(f"Lock feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
+            await asyncio.sleep(MONGODB_ERROR_INTERVAL)
+
+
+async def unlock_feed_position():
+    collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
+    while True:
+        try:
+            return await collection.update_one(
+                {"_id": MONGODB_STATE_ID},
+                {
+                    "$set": {
+                        LOCK_DATE_MODIFIED_KEY: False
+                    },
+                }
+            )
+        except PyMongoError as e:
+            logger.warning(f"Unlock feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(MONGODB_ERROR_INTERVAL)

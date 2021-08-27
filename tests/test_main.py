@@ -143,7 +143,7 @@ async def test_init_feed():
     ])
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-        result = await init_feed(should_run, session, "url", data_handler)
+        result = await init_feed(should_run, session, "/abc", data_handler)
 
     assert result == ("b", "f")
     assert sleep_mock.mock_calls == [call(CONNECTION_ERROR_INTERVAL), call(FEED_STEP_INTERVAL)]
@@ -169,7 +169,7 @@ async def test_init_feed_payload_error():
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
         try:
-            await init_feed(should_run, session, "url", data_handler)
+            await init_feed(should_run, session, "/abc", data_handler)
         except StopAsyncIteration:
             pass
 
@@ -205,7 +205,7 @@ async def test_crawler():
         with patch("prozorro_crawler.crawler.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
             with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
                 try:
-                    await crawler(lambda: True, session, "url", data_handler)
+                    await crawler(lambda: True, session, "/abc", data_handler)
                 except StopAsyncIteration:
                     pass
 
@@ -216,7 +216,7 @@ async def test_crawler():
         call(FEED_STEP_INTERVAL),
         call(FEED_STEP_INTERVAL),
     ]
-    save_crawler_position_mock.assert_called_once_with(session, data, descending="")
+    save_crawler_position_mock.assert_called_once_with(session, "/abc", data, descending="")
     data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
 
@@ -252,13 +252,13 @@ async def test_crawler_few_items():
 
     with patch("prozorro_crawler.crawler.save_crawler_position", AsyncMock()) as save_crawler_position_mock:
         with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-            await crawler(lambda: True, session, "url", data_handler, descending="1")
+            await crawler(lambda: True, session, "/abc", data_handler, descending="1")
 
     assert sleep_mock.mock_calls == [
         call(NO_ITEMS_INTERVAL),
         call(FEED_STEP_INTERVAL),
     ]
-    save_crawler_position_mock.assert_called_once_with(session, data, descending="1")
+    save_crawler_position_mock.assert_called_once_with(session, "/abc", data, descending="1")
     data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
 
@@ -272,7 +272,7 @@ async def test_crawler_404():
 
     with patch("prozorro_crawler.crawler.drop_feed_position", AsyncMock()) as drop_feed_position_mock:
         with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
-            await crawler(lambda: True, session, "url", data_handler)
+            await crawler(lambda: True, session, "/abc", data_handler)
 
     assert sleep_mock.mock_calls == []
     drop_feed_position_mock.assert_called_once()
@@ -297,7 +297,7 @@ async def test_crawler_payload_error():
 
     with patch("prozorro_crawler.main.asyncio.sleep", AsyncMock()) as sleep_mock:
         try:
-            await crawler(lambda: True, session, "url", data_handler)
+            await crawler(lambda: True, session, "/abc", data_handler)
         except StopAsyncIteration:
             pass
 
@@ -315,9 +315,9 @@ async def test_process_resource():
     data = {"something": "hello"}
     with patch("prozorro_crawler.resource.get_response_data",
                AsyncMock(return_value=data)) as get_response_data_mock:
-        await process_resource(session, "url", "abc", process_function)
+        await process_resource(session, "/abc", "resource", process_function)
 
-    get_response_data_mock.assert_called_once_with(session, "url/abc")
+    get_response_data_mock.assert_called_once_with(session, "/abc/resource")
     process_function.assert_called_once_with(session, data)
 
 
@@ -412,8 +412,12 @@ async def test_save_crawler_position():
             "offset": "001"
         }
     }
-    with patch("prozorro_crawler.crawler.save_feed_position", AsyncMock()) as save_feed_position_mock:
-        await save_crawler_position(session, response)
+
+    with patch("prozorro_crawler.crawler.get_feed_position",
+               AsyncMock(side_effect=[None, StopAsyncIteration])):
+        with patch("prozorro_crawler.crawler.save_feed_position",
+                   AsyncMock()) as save_feed_position_mock:
+            await save_crawler_position(session, "/abc", response)
 
     save_feed_position_mock.assert_called_once_with(
         {
@@ -438,8 +442,11 @@ async def test_save_backward_crawler_position():
             "offset": "001"
         }
     }
-    with patch("prozorro_crawler.crawler.save_feed_position", AsyncMock()) as save_feed_position_mock:
-        await save_crawler_position(session, response, descending=True)
+    with patch("prozorro_crawler.crawler.get_feed_position",
+               AsyncMock(side_effect=[None, StopAsyncIteration])):
+        with patch("prozorro_crawler.crawler.save_feed_position",
+                   AsyncMock()) as save_feed_position_mock:
+            await save_crawler_position(session, "/abc", response, descending=True)
 
     save_feed_position_mock.assert_called_once_with(
         {
