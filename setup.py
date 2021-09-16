@@ -6,8 +6,8 @@ with open(os.path.join(os.path.dirname(__file__), 'requirements.txt')) as f:
 
 setup(
     name='prozorro_crawler',
-    version_format='{tag}',
-    setup_requires=['setuptools-git-version'],
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
     description='',
     packages=find_packages('src'),
     package_dir={'': 'src'},
