@@ -33,85 +33,87 @@ class GetCollectionTestCase(unittest.TestCase):
 
 
 @pytest.mark.asyncio
-async def test_save_feed_position():
-    with patch("prozorro_crawler.storage.get_mongodb_collection", MagicMock()) as collection_mock:
-        collection_mock.return_value.update_one = AsyncMock(
-            side_effect=[
-                ServerSelectionTimeoutError("Oops"),
-                ServerSelectionTimeoutError("Oops"),
-                "",
-            ]
-        )
-        test_data = {"test": "hi"}
-
-        with patch("prozorro_crawler.storage.asyncio.sleep", AsyncMock()) as sleep_mock:
-            await save_feed_position(test_data)
-
-        assert sleep_mock.mock_calls == [
-            call(MONGODB_ERROR_INTERVAL),
-        ] * 2
-
-        assert collection_mock.return_value.update_one.mock_calls == [
-            call(
-                {"_id": MONGODB_STATE_ID},
-                {"$set": test_data},
-                upsert=True
-            )
-        ] * 3
-
-
-@pytest.mark.asyncio
-async def test_get_feed_position():
-    with patch("prozorro_crawler.storage.get_mongodb_collection", MagicMock()) as collection_mock:
-        test_data = {"test": "hi"}
-        collection_mock.return_value.find_one = AsyncMock(
-            side_effect=[
-                ServerSelectionTimeoutError("Oops"),
-                ServerSelectionTimeoutError("Oops"),
-                ServerSelectionTimeoutError("Oops"),
-                test_data,
-            ]
-        )
-        with patch("prozorro_crawler.storage.asyncio.sleep", AsyncMock()) as sleep_mock:
-            result = await get_feed_position()
-
-        assert sleep_mock.mock_calls == [
-            call(MONGODB_ERROR_INTERVAL),
-        ] * 3
-
-        assert collection_mock.return_value.find_one.mock_calls == [
-            call({"_id": MONGODB_STATE_ID})
-        ] * 4
-        assert result is test_data
-
-
-@pytest.mark.asyncio
-async def test_drop_feed_position():
-    with patch("prozorro_crawler.storage.get_mongodb_collection", MagicMock()) as collection_mock:
-        test_data = {"test": "hi"}
-        collection_mock.return_value.update_one = AsyncMock(
-            side_effect=[
-                ServerSelectionTimeoutError("Oops"),
-                test_data,
-            ]
-        )
-        with patch("prozorro_crawler.storage.asyncio.sleep", AsyncMock()) as sleep_mock:
-            result = await drop_feed_position()
-
-        assert sleep_mock.mock_calls == [
-            call(MONGODB_ERROR_INTERVAL),
+@patch("prozorro_crawler.storage.get_mongodb_collection")
+@patch("prozorro_crawler.storage.asyncio.sleep")
+async def test_save_feed_position(sleep_mock, collection_mock):
+    collection_mock.return_value.update_one = AsyncMock(
+        side_effect=[
+            ServerSelectionTimeoutError("Oops"),
+            ServerSelectionTimeoutError("Oops"),
+            "",
         ]
+    )
+    test_data = {"test": "hi"}
 
-        assert collection_mock.return_value.update_one.mock_calls == [
-            call(
-                {"_id": MONGODB_STATE_ID},
-                {
-                    "$unset": {
-                        "backward_offset": "",
-                        "forward_offset": "",
-                        "server_id": "",
-                    }
+    await save_feed_position(test_data)
+
+    assert sleep_mock.mock_calls == [
+        call(MONGODB_ERROR_INTERVAL),
+    ] * 2
+
+    assert collection_mock.return_value.update_one.mock_calls == [
+        call(
+            {"_id": MONGODB_STATE_ID},
+            {"$set": test_data},
+            upsert=True
+        )
+    ] * 3
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.storage.get_mongodb_collection")
+@patch("prozorro_crawler.storage.asyncio.sleep")
+async def test_get_feed_position(sleep_mock, collection_mock):
+    test_data = {"test": "hi"}
+    collection_mock.return_value.find_one = AsyncMock(
+        side_effect=[
+            ServerSelectionTimeoutError("Oops"),
+            ServerSelectionTimeoutError("Oops"),
+            ServerSelectionTimeoutError("Oops"),
+            test_data,
+        ]
+    )
+
+    result = await get_feed_position()
+
+    assert sleep_mock.mock_calls == [
+        call(MONGODB_ERROR_INTERVAL),
+    ] * 3
+
+    assert collection_mock.return_value.find_one.mock_calls == [
+        call({"_id": MONGODB_STATE_ID})
+    ] * 4
+    assert result is test_data
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.storage.get_mongodb_collection")
+@patch("prozorro_crawler.storage.asyncio.sleep")
+async def test_drop_feed_position(sleep_mock, collection_mock):
+    test_data = {"test": "hi"}
+    collection_mock.return_value.update_one = AsyncMock(
+        side_effect=[
+            ServerSelectionTimeoutError("Oops"),
+            test_data,
+        ]
+    )
+
+    result = await drop_feed_position()
+
+    assert sleep_mock.mock_calls == [
+        call(MONGODB_ERROR_INTERVAL),
+    ]
+
+    assert collection_mock.return_value.update_one.mock_calls == [
+        call(
+            {"_id": MONGODB_STATE_ID},
+            {
+                "$unset": {
+                    "backward_offset": "",
+                    "forward_offset": "",
+                    "server_id": "",
                 }
-            )
-        ] * 2
-        assert result is test_data
+            }
+        )
+    ] * 2
+    assert result is test_data
