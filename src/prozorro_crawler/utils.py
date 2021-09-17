@@ -1,3 +1,5 @@
+import dateutil.parser
+
 from prozorro_crawler.settings import PUBLIC_API_HOST, CRAWLER_USER_AGENT, BASE_URL
 from prozorro_crawler.storage import (
     BACKWARD_OFFSET_KEY,
@@ -37,3 +39,7 @@ def get_offset_key(descending=False):
 
 def get_date_modified_key(descending=False):
     return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY
+
+
+def parse_dt_string(dt_string):
+    return dateutil.parser.parse(dt_string)

@@ -50,7 +50,6 @@ formatter = jsonlogger.JsonFormatter(
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 
-
 # timeouts for api calls
 # every FEED_STEP_INTERVAL every crawler(backward and forward) gets API_LIMIT items
 # and processes every one of them
@@ -71,6 +70,7 @@ BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
 DATE_MODIFIED_LOCK_ENABLED = bool(getenv("DATE_MODIFIED_LOCK_ENABLED", False))
 DATE_MODIFIED_SKIP_STATUSES = getenv("DATE_MODIFIED_SKIP_STATUSES", "").split(",")
+DATE_MODIFIED_MARGIN_SECONDS = int(getenv("DATE_MODIFIED_MARGIN_SECONDS", 86400))
 
 CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
 

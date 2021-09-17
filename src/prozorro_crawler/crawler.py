@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import aiohttp
 import asyncio
 from json.decoder import JSONDecodeError
@@ -13,6 +15,7 @@ from prozorro_crawler.settings import (
     API_MODE,
     DATE_MODIFIED_SKIP_STATUSES,
     DATE_MODIFIED_LOCK_ENABLED,
+    DATE_MODIFIED_MARGIN_SECONDS,
 )
 from prozorro_crawler.storage import (
     lock_feed_position,
@@ -30,8 +33,12 @@ from prozorro_crawler.utils import (
     get_session_server_id,
     get_offset_key,
     get_date_modified_key,
+    parse_dt_string,
     SERVER_ID_COOKIE_NAME,
 )
+
+
+DATE_MODIFIED_MARGIN = timedelta(seconds=DATE_MODIFIED_MARGIN_SECONDS)
 
 
 async def init_crawler(should_run, session, url, data_handler, **kwargs):
@@ -288,7 +295,7 @@ async def save_crawler_position(session, url, response, descending=False):
             not DATE_MODIFIED_LOCK_ENABLED or
             not feed_position.get(LOCK_DATE_MODIFIED_KEY, False)
         ):
-            date_modified = get_date_modified(response)
+            date_modified = get_feed_date_modified(response)
             if date_modified:
                 feed_position_data[get_date_modified_key(descending)] = date_modified
         else:
@@ -307,7 +314,13 @@ async def save_crawler_position(session, url, response, descending=False):
 
 async def drop_crawler_position(session, url, descending=False):
     await drop_feed_position()
-    logger.info(f"Drop feed position.")
+    logger.info(
+        f"Drop feed position.",
+        extra={
+            "MESSAGE_ID": "CRAWLER_DROP_FEED_POSITION",
+            "FEED_URL": url,
+        }
+    )
     if DATE_MODIFIED_LOCK_ENABLED:
         await lock_feed_position()
         logger.info(
@@ -326,24 +339,33 @@ async def check_crawler_should_stop(session, url, response, descending=False):
 
     if response["data"] and descending and DATE_MODIFIED_LOCK_ENABLED:
         feed_position = await get_feed_position()
-        if feed_position.get(LOCK_DATE_MODIFIED_KEY, False):
-            date_modified = get_date_modified(response)
-            date_modified_reached = date_modified < feed_position.get(LATEST_DATE_MODIFIED_KEY)
-            if date_modified_reached:
-                await unlock_feed_position()
-                logger.info(
-                    f"Unlock feed position date modified.",
-                    extra={
-                        "MESSAGE_ID": "CRAWLER_UNLOCK_DATE_MODIFIED",
-                        "FEED_URL": url,
-                    }
-                )
-            return date_modified_reached
+        date_modified = get_feed_date_modified(response)
+        date_modified_saved = feed_position.get(LATEST_DATE_MODIFIED_KEY)
+        if date_modified and date_modified_saved and parse_dt_string(date_modified) < (
+            parse_dt_string(date_modified_saved) - DATE_MODIFIED_MARGIN
+        ):
+            logger.info(
+                f"Reached saved dateModified {date_modified_saved} + "
+                f"{DATE_MODIFIED_MARGIN_SECONDS} seconds.",
+                extra={
+                    "MESSAGE_ID": "CRAWLER_DATE_MODIFIED_REACHED",
+                    "FEED_URL": url,
+                }
+            )
+            await unlock_feed_position()
+            logger.info(
+                f"Unlock feed position date modified.",
+                extra={
+                    "MESSAGE_ID": "CRAWLER_UNLOCK_DATE_MODIFIED",
+                    "FEED_URL": url,
+                }
+            )
+            return True
 
     return False
 
 
-def get_date_modified(response):
+def get_feed_date_modified(response):
     for item in reversed(response["data"]):
         date_modified = item.get("dateModified")
         if date_modified:

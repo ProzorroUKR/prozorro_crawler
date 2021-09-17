@@ -1,7 +1,12 @@
+from datetime import datetime, timedelta
+
 from prozorro_crawler.main import (
     should_run,
 )
-from prozorro_crawler.crawler import init_feed, crawler, save_crawler_position, init_crawler
+from prozorro_crawler.crawler import (
+    init_feed, crawler, save_crawler_position, init_crawler, check_crawler_should_stop,
+    DATE_MODIFIED_MARGIN, get_feed_date_modified, drop_crawler_position,
+)
 from unittest.mock import MagicMock, patch, call
 from prozorro_crawler.settings import (
     FEED_STEP_INTERVAL, CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL,
@@ -314,6 +319,36 @@ async def test_save_crawler_position(save_feed_position_mock):
 
 
 @pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.get_feed_position")
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.save_feed_position")
+async def test_save_crawler_position_skip_modified_if_locked(save_feed_position_mock, get_feed_position_mock):
+    get_feed_position_mock.return_value = {
+        "lock_date_modified": True
+    }
+    session = MagicMock()
+    session.cookie_jar.filter_cookies.return_value = {"SERVER_ID": MagicMock(value="jah")}
+    response = {
+        "data": [
+            {
+                "dateModified": "yesterday"
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+    await save_crawler_position(session, "/abc", response)
+
+    save_feed_position_mock.assert_called_once_with(
+        {
+            "forward_offset": "001",
+            "server_id": "jah"
+        }
+    )
+
+
+@pytest.mark.asyncio
 @patch("prozorro_crawler.crawler.get_feed_position", AsyncMock(side_effect=[None, StopAsyncIteration]))
 @patch("prozorro_crawler.crawler.save_feed_position")
 async def test_save_backward_crawler_position(save_feed_position_mock):
@@ -338,3 +373,221 @@ async def test_save_backward_crawler_position(save_feed_position_mock):
             "server_id": "jah"
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_check_crawler_should_stop_desc_with_empty_data():
+    session = MagicMock()
+    response = {
+        "data": [],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, True)
+
+    assert result == True
+
+
+@pytest.mark.asyncio
+async def test_check_crawler_should_not_stop_asc_with_empty_data():
+    session = MagicMock()
+    response = {
+        "data": [],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, False)
+
+    assert result == False
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.get_feed_position")
+@patch("prozorro_crawler.crawler.unlock_feed_position")
+async def test_check_crawler_should_stop_if_date_modified_reached(
+    unlock_feed_position_mock,
+    get_feed_position_mock,
+):
+    now = datetime.now()
+    get_feed_position_mock.return_value = {
+        "lock_date_modified": True,
+        "latest_date_modified": now.isoformat(),
+        "backward_offset": "b",
+        "forward_offset": "f",
+        "server_id": "007",
+    }
+    session = MagicMock()
+    response = {
+        "data": [
+            {
+                "dateModified": (now - DATE_MODIFIED_MARGIN - timedelta(minutes=1)).isoformat()
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, True)
+
+    assert unlock_feed_position_mock.call_count == 1
+    assert result == True
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.get_feed_position")
+@patch("prozorro_crawler.crawler.unlock_feed_position")
+async def test_check_crawler_should_not_stop_if_date_modified_not_reached(
+    unlock_feed_position_mock,
+    get_feed_position_mock,
+):
+    now = datetime.now()
+    get_feed_position_mock.return_value = {
+        "lock_date_modified": True,
+        "latest_date_modified": now.isoformat(),
+        "backward_offset": "b",
+        "forward_offset": "f",
+        "server_id": "007",
+    }
+    session = MagicMock()
+    response = {
+        "data": [
+            {
+                "dateModified": (now - DATE_MODIFIED_MARGIN + timedelta(minutes=1)).isoformat()
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, True)
+
+    assert unlock_feed_position_mock.call_count == 0
+    assert result == False
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.get_feed_position")
+@patch("prozorro_crawler.crawler.unlock_feed_position")
+async def test_check_crawler_should_not_stop_if_date_modified_not_saved(
+    unlock_feed_position_mock,
+    get_feed_position_mock,
+):
+    now = datetime.now()
+    get_feed_position_mock.return_value = {}
+    session = MagicMock()
+    response = {
+        "data": [
+            {
+                "dateModified": (now - DATE_MODIFIED_MARGIN - timedelta(minutes=1)).isoformat()
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, True)
+
+    assert unlock_feed_position_mock.call_count == 0
+    assert result == False
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.get_feed_position")
+@patch("prozorro_crawler.crawler.unlock_feed_position")
+async def test_check_crawler_should_not_stop_for_forward_crawler(
+    unlock_feed_position_mock,
+    get_feed_position_mock,
+):
+    now = datetime.now()
+    get_feed_position_mock.return_value = {
+        "lock_date_modified": True,
+        "latest_date_modified": now.isoformat(),
+        "backward_offset": "b",
+        "forward_offset": "f",
+        "server_id": "007",
+    }
+    session = MagicMock()
+    response = {
+        "data": [
+            {
+                "dateModified": (now - DATE_MODIFIED_MARGIN - timedelta(minutes=1)).isoformat()
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    result = await check_crawler_should_stop(session, "/abc", response, False)
+
+    assert unlock_feed_position_mock.call_count == 0
+    assert result == False
+
+
+@pytest.mark.asyncio
+async def test_get_feed_date_modified():
+    now = datetime.now()
+    response = {
+        "data": [
+            {
+                "dateModified": "today"
+            },
+            {
+                "dateModified": "yesterday"
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    assert get_feed_date_modified(response) == "yesterday"
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_SKIP_STATUSES", ["active.tendering"])
+async def test_get_feed_date_modified_skip_status():
+    now = datetime.now()
+    response = {
+        "data": [
+            {
+                "dateModified": "today",
+                "status": "complete"
+            },
+            {
+                "dateModified": "yesterday",
+                "status": "active.tendering"
+            }
+        ],
+        "next_page": {
+            "offset": "001"
+        }
+    }
+
+    assert get_feed_date_modified(response) == "today"
+
+
+
+@pytest.mark.asyncio
+@patch("prozorro_crawler.crawler.DATE_MODIFIED_LOCK_ENABLED", True)
+@patch("prozorro_crawler.crawler.drop_feed_position")
+@patch("prozorro_crawler.crawler.lock_feed_position")
+async def test_drop_crawler_position(lock_feed_position_mock, drop_feed_position_mock):
+    now = datetime.now()
+    session = MagicMock()
+
+    await drop_crawler_position(session, "/abc", True)
+
+    assert drop_feed_position_mock.call_count == 1
+    assert lock_feed_position_mock.call_count == 1
