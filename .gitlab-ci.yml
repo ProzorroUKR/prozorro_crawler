@@ -5,7 +5,7 @@ test:
   image: python:3.8
   stage: test
   tags:
-    - kube
+    - kube-dev
   script:
     - pip install -e .
     - pip install pytest pytest-asyncio coverage
