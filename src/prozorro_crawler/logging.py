@@ -5,18 +5,36 @@ from datetime import datetime, timezone
 
 from aiohttp.abc import AbstractAccessLogger
 from pythonjsonlogger import jsonlogger
-
-# every request task will have its own context and request-id as a result
+from contextlib import contextmanager
 from pythonjsonlogger.jsonlogger import merge_record_extra
+from typing import Dict
 
-LOG_CONTEXT = {}
+
+LOG_CONTEXT: Dict[str, ContextVar] = {}
 
 
 def update_log_context(**kwargs):
+    tokens = {}
     for k, v in kwargs.items():
         if k not in LOG_CONTEXT:
             LOG_CONTEXT[k] = ContextVar(f"log_context_{k}")
-        LOG_CONTEXT[k].set(v)
+        tokens[k] = LOG_CONTEXT[k].set(v)
+    return tokens
+
+
+def reset_log_context(tokens: dict, **kwargs):
+    for k in kwargs:
+        if k in LOG_CONTEXT and k in tokens:
+            LOG_CONTEXT[k].reset(tokens[k])
+
+
+@contextmanager
+def log_context(**kwargs):
+    tokens = update_log_context(**kwargs)
+    try:
+        yield
+    finally:
+        reset_log_context(tokens, **kwargs)
 
 
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
