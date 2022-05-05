@@ -1,4 +1,4 @@
-from prozorro_crawler.storage import get_mongodb_collection
+from prozorro_crawler.storage.mongodb import get_mongodb_collection
 from prozorro_crawler.settings import (
     LOCK_ENABLED,
     LOCK_COLLECTION_NAME,
@@ -6,7 +6,7 @@ from prozorro_crawler.settings import (
     LOCK_UPDATE_TIME,
     LOCK_PROCESS_NAME,
     LOCK_ACQUIRE_INTERVAL,
-    MONGODB_ERROR_INTERVAL,
+    DB_ERROR_INTERVAL,
     logger,
 )
 from pymongo.errors import PyMongoError, DuplicateKeyError
@@ -81,7 +81,7 @@ class Lock:
                     )
                     return os.kill(os.getpid(), signal.SIGTERM)
                 logger.warning(e)
-                await sleep(MONGODB_ERROR_INTERVAL)
+                await sleep(DB_ERROR_INTERVAL)
             else:
                 logger.debug(
                     f"Updated lock {LOCK_PROCESS_NAME} #{self.id}: "

@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
 import signal
 
 from prozorro_crawler.crawler import init_crawler
 from prozorro_crawler.lock import Lock
+from prozorro_crawler.storage import close_connection
 from prozorro_crawler.settings import (
     logger,
     API_OPT_FIELDS,
@@ -87,6 +87,7 @@ def main(
         Lock.run_locked(get_app, should_run)
     )
     # Wait 250 ms for the underlying SSL connections to close
+    loop.run_until_complete(close_connection())
     loop.run_until_complete(asyncio.sleep(0.250))
     loop.close()
 

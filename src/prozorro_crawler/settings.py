@@ -21,6 +21,7 @@ def warn_mongodb(key, value, default):
             f"in order different crawlers don't clash."
         )
 
+
 def warn_crawler_user_agent(key, value, default):
     if value == default:
         logger.warning(
@@ -31,6 +32,7 @@ def warn_crawler_user_agent(key, value, default):
         logger.info(
             f"Using '{value}' as crawler user agent."
         )
+
 
 def assert_url(key, value, default):
     assert not value.endswith("/")
@@ -66,6 +68,7 @@ API_LIMIT = int(getenv("API_LIMIT", 100))
 API_MODE = getenv("API_MODE", "_all_")
 API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
+API_TOKEN = getenv("API_TOKEN")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
 DATE_MODIFIED_LOCK_ENABLED = bool(getenv("DATE_MODIFIED_LOCK_ENABLED", False))
@@ -74,11 +77,20 @@ DATE_MODIFIED_MARGIN_SECONDS = int(getenv("DATE_MODIFIED_MARGIN_SECONDS", 86400)
 
 CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
 
-MONGODB_URL = getenv("MONGODB_URL", "mongodb://root:example@mongo:27017")
+MONGODB_URL = getenv("MONGODB_URL", "")
 MONGODB_DATABASE = getenv("MONGODB_DATABASE", "prozorro-crawler")
 MONGODB_STATE_COLLECTION = getenv("MONGODB_STATE_COLLECTION", "prozorro-crawler-state")
 MONGODB_STATE_ID = getenv("MONGODB_STATE_ID", "FEED_CRAWLER_STATE", warn_mongodb)
-MONGODB_ERROR_INTERVAL = int(getenv("MONGODB_ERROR_INTERVAL", 5))
+
+POSTGRES_HOST = getenv("POSTGRES_HOST", "")
+POSTGRES_PORT = int(getenv("POSTGRES_PORT", 5432))
+POSTGRES_DB = getenv("POSTGRES_DB", "prozorro-crawler")
+POSTGRES_USER = getenv("POSTGRES_USER", "agent")
+POSTGRES_PASSWORD = getenv("POSTGRES_PASSWORD", "kalina")
+POSTGRES_STATE_TABLE = getenv("POSTGRES_STATE_TABLE", "crawler_state")
+POSTGRES_STATE_ID = getenv("POSTGRES_STATE_ID", "crawler_state", warn_mongodb)
+
+DB_ERROR_INTERVAL = int(getenv("DB_ERROR_INTERVAL", 5))
 
 # lock
 LOCK_ENABLED = bool(getenv("LOCK_ENABLED", False))
