@@ -1,7 +1,7 @@
 import dateutil.parser
 
-from prozorro_crawler.settings import PUBLIC_API_HOST, CRAWLER_USER_AGENT, BASE_URL
-from prozorro_crawler.storage import (
+from prozorro_crawler.settings import PUBLIC_API_HOST, CRAWLER_USER_AGENT, BASE_URL, API_TOKEN
+from prozorro_crawler.storage.base import (
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
     EARLIEST_DATE_MODIFIED_KEY,
@@ -13,6 +13,8 @@ SERVER_ID_COOKIE_NAME = "SERVER_ID"
 DEFAULT_HEADERS = {
     "User-Agent": CRAWLER_USER_AGENT
 }
+if API_TOKEN:
+    DEFAULT_HEADERS["Authorization"] = f"Bearer {API_TOKEN}"
 
 
 def get_resource_url(resource):

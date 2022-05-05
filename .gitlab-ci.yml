@@ -9,7 +9,7 @@ test:
   script:
     - pip install -e .
     - pip install pytest pytest-asyncio coverage
-    - coverage run --source=src/ -m pytest
+    - MONGODB_URL=mongodb://localhost:27017 coverage run --source=src/ -m pytest
     - coverage report
   coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
 

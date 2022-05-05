@@ -13,7 +13,8 @@ import pytest
 @patch("prozorro_crawler.main.asyncio.sleep", new_callable=MagicMock)
 @patch("prozorro_crawler.main.Lock")
 @patch("prozorro_crawler.main.asyncio.get_event_loop")
-async def test_main_function(get_event_loop_mock, lock_mock, sleep_mock):
+@patch("prozorro_crawler.main.close_connection", new_callable=MagicMock)
+async def test_main_function(close_connection_mock, get_event_loop_mock, lock_mock, sleep_mock):
     data_handler = AsyncMock()
     init_task = AsyncMock()
     headers = {1: 2, 3: "4"}
@@ -23,6 +24,7 @@ async def test_main_function(get_event_loop_mock, lock_mock, sleep_mock):
     lock_mock.run_locked.assert_called_once()
     assert get_event_loop_mock.return_value.run_until_complete.mock_calls == [
         call(lock_mock.run_locked.return_value),
+        call(close_connection_mock()),
         call(sleep_mock(0.250)),
     ]
 
