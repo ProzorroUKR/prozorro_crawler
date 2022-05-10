@@ -16,6 +16,7 @@ from json.decoder import JSONDecodeError
 from .base import AsyncMock
 import aiohttp
 import pytest
+import json
 
 
 @pytest.mark.asyncio
@@ -47,7 +48,8 @@ async def test_init_crawler_saved_feed(crawler_mock, get_feed_position_mock):
             "/abc",
             data_handler,
             offset="f",
-            opt_fields=opt_fields
+            opt_fields=opt_fields,
+            json_loads=json.loads,
         ),
         call(
             should_run,
@@ -56,7 +58,8 @@ async def test_init_crawler_saved_feed(crawler_mock, get_feed_position_mock):
             data_handler,
             offset="b",
             descending="1",
-            opt_fields=opt_fields
+            opt_fields=opt_fields,
+            json_loads=json.loads,
         ),
     ]
     session.cookie_jar.update_cookies.assert_called_once_with({"SERVER_ID": "007"})
@@ -82,7 +85,8 @@ async def test_init_crawler_init_feed(crawler_mock, init_feed_mock):
         session,
         "/abc",
         data_handler,
-        opt_fields=opt_fields
+        opt_fields=opt_fields,
+        json_loads=json.loads,
     )
     assert crawler_mock.mock_calls == [
         call(
@@ -91,7 +95,8 @@ async def test_init_crawler_init_feed(crawler_mock, init_feed_mock):
             "/abc",
             data_handler,
             offset="f1",
-            opt_fields=opt_fields
+            opt_fields=opt_fields,
+            json_loads=json.loads,
         ),
         call(
             should_run,
@@ -100,7 +105,8 @@ async def test_init_crawler_init_feed(crawler_mock, init_feed_mock):
             data_handler,
             offset="b-2",
             descending="1",
-            opt_fields=opt_fields
+            opt_fields=opt_fields,
+            json_loads=json.loads,
         ),
     ]
 
@@ -114,8 +120,8 @@ async def test_init_feed(sleep_mock):
         status=200,
         json=AsyncMock(
             return_value={
-                "next_page": {"offset": "b"},
-                "prev_page": {"offset": "f"},
+                "next_page": {"offset": 12},
+                "prev_page": {"offset": 999},
                 "data": ["w", "t", "f"],
             }
         )
@@ -126,9 +132,9 @@ async def test_init_feed(sleep_mock):
         response,
     ])
 
-    result = await init_feed(should_run, session, "/abc", data_handler)
+    result = await init_feed(should_run, session, "/abc", data_handler, json_loads=json.loads)
 
-    assert result == ("b", "f")
+    assert result == (12, 999)
     assert sleep_mock.mock_calls == [call(CONNECTION_ERROR_INTERVAL), call(FEED_STEP_INTERVAL)]
     data_handler.assert_called_once_with(session, ["w", "t", "f"])
 
@@ -152,7 +158,7 @@ async def test_init_feed_payload_error(sleep_mock):
     ])
 
     try:
-        await init_feed(should_run, session, "/abc", data_handler)
+        await init_feed(should_run, session, "/abc", data_handler, json_loads=json.loads)
     except StopAsyncIteration:
         pass
 
@@ -168,8 +174,8 @@ async def test_crawler(sleep_mock, save_crawler_position_mock):
     data_handler = AsyncMock()
     session = MagicMock()
     data = {
-        "next_page": {"offset": "b"},
-        "prev_page": {"offset": "f"},
+        "next_page": {"offset": 2},
+        "prev_page": {"offset": 99},
         "data": ["w", "t", "f"],
     }
     response = MagicMock(
@@ -188,7 +194,7 @@ async def test_crawler(sleep_mock, save_crawler_position_mock):
     ])
 
     try:
-        await crawler(should_run, session, "/abc", data_handler)
+        await crawler(should_run, session, "/abc", data_handler, json_loads=json.loads)
     except StopAsyncIteration:
         pass
 
@@ -210,8 +216,8 @@ async def test_crawler_few_items(sleep_mock, save_crawler_position_mock):
     data_handler = AsyncMock()
     session = MagicMock()
     data = {
-        "next_page": {"offset": "b"},
-        "prev_page": {"offset": "f"},
+        "next_page": {"offset": 1},
+        "prev_page": {"offset": 9},
         "data": ["w", "t", "f"],
     }
     response = MagicMock(
@@ -224,8 +230,8 @@ async def test_crawler_few_items(sleep_mock, save_crawler_position_mock):
         status=200,
         json=AsyncMock(
             return_value={
-                "next_page": {"offset": "b"},
-                "prev_page": {"offset": "f"},
+                "next_page": {"offset": 1},
+                "prev_page": {"offset": 9},
                 "data": [],
             }
         )
