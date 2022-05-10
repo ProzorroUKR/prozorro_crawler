@@ -7,6 +7,7 @@ from prozorro_crawler.settings import (
 )
 from .base import AsyncMock
 import pytest
+import json
 
 
 @pytest.mark.asyncio
@@ -54,6 +55,7 @@ async def test_init_crawler_saved_feed(init_crawler_mock, client_mock):
             session,
             url,
             data_handler,
-            opt_fields=opt_fields
+            opt_fields=opt_fields,
+            json_loads=json.loads,
         ),
     ]

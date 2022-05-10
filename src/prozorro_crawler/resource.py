@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+import json
 from json.decoder import JSONDecodeError
 from prozorro_crawler.settings import (
     logger,
@@ -15,7 +16,7 @@ async def process_resource(session, url, resource_id, process_function):
     return await process_function(session, data)
 
 
-async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
+async def get_response_data(session, url, json_loads=json.loads, error_retries=GET_ERROR_RETRIES):
     while True:
         try:
             resp = await session.get(url)
@@ -28,7 +29,7 @@ async def get_response_data(session, url, error_retries=GET_ERROR_RETRIES):
         else:
             if resp.status == 200:
                 try:
-                    response = await resp.json()
+                    response = await resp.json(loads=json_loads)
                 except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
                     logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)

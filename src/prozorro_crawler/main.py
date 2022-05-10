@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 import signal
+import json
 
 from prozorro_crawler.crawler import init_crawler
 from prozorro_crawler.lock import Lock
@@ -33,6 +34,7 @@ async def run_app(
     additional_headers=None,
     resource=API_RESOURCE,
     opt_fields=API_OPT_FIELDS,
+    json_loads=json.loads,
 ):
 
     if init_task is not None:
@@ -48,6 +50,7 @@ async def run_app(
             url,
             data_handler,
             opt_fields=",".join(opt_fields),
+            json_loads=json_loads,
         )
 
 
@@ -67,6 +70,7 @@ def main(
     additional_headers=None,
     resource=API_RESOURCE,
     opt_fields=API_OPT_FIELDS,
+    json_loads=json.loads,
 ):
     signal.signal(signal.SIGINT, get_stop_signal_handler("SIGINT"))
     signal.signal(signal.SIGTERM, get_stop_signal_handler("SIGTERM"))
@@ -80,6 +84,7 @@ def main(
             opt_fields=opt_fields,
             init_task=init_task,
             additional_headers=additional_headers,
+            json_loads=json_loads,
         )
         return app
 

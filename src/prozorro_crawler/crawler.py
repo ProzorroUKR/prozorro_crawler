@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import aiohttp
 import asyncio
+import json
 from json.decoder import JSONDecodeError
 
 from prozorro_crawler.settings import (
@@ -41,7 +42,7 @@ from prozorro_crawler.utils import (
 DATE_MODIFIED_MARGIN = timedelta(seconds=DATE_MODIFIED_MARGIN_SECONDS)
 
 
-async def init_crawler(should_run, session, url, data_handler, **kwargs):
+async def init_crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
     logger.info(
         f"Start crawling",
         extra={
@@ -80,6 +81,7 @@ async def init_crawler(should_run, session, url, data_handler, **kwargs):
                 session,
                 url,
                 data_handler,
+                json_loads=json_loads,
                 **kwargs,
             )
         await asyncio.gather(
@@ -89,6 +91,7 @@ async def init_crawler(should_run, session, url, data_handler, **kwargs):
                 session,
                 url,
                 data_handler,
+                json_loads=json_loads,
                 offset=forward_offset,
                 **kwargs,
             ),
@@ -98,6 +101,7 @@ async def init_crawler(should_run, session, url, data_handler, **kwargs):
                 session,
                 url,
                 data_handler,
+                json_loads=json_loads,
                 offset=backward_offset,
                 descending="1",
                 **kwargs,
@@ -105,7 +109,7 @@ async def init_crawler(should_run, session, url, data_handler, **kwargs):
         )
 
 
-async def init_feed(should_run, session, url, data_handler, **kwargs):
+async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs):
     feed_params = get_feed_params(descending="1", **kwargs)
     logger.info(
         "Crawler initialization",
@@ -129,14 +133,14 @@ async def init_feed(should_run, session, url, data_handler, **kwargs):
         else:
             if resp.status == 200:
                 try:
-                    response = await resp.json()
+                    response = await resp.json(loads=json_loads)
                 except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
                     logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
                     await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
                     continue
 
                 await data_handler(session, response["data"])
-                return response["next_page"]["offset"], response["prev_page"]["offset"]
+                return float(response["next_page"]["offset"]), float(response["prev_page"]["offset"])
             else:
                 logger.error(
                     "Error on feed initialize request: {} {}".format(
@@ -151,7 +155,7 @@ async def init_feed(should_run, session, url, data_handler, **kwargs):
             await asyncio.sleep(FEED_STEP_INTERVAL)
 
 
-async def crawler(should_run, session, url, data_handler, **kwargs):
+async def crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
     feed_params = get_feed_params(**kwargs)
     logger.info(
         "Crawler started",
@@ -186,7 +190,7 @@ async def crawler(should_run, session, url, data_handler, **kwargs):
         else:
             if resp.status == 200:
                 try:
-                    response = await resp.json()
+                    response = await resp.json(loads=json_loads)
                 except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
                     logger.warning(e, extra={
                         "MESSAGE_ID": "HTTP_EXCEPTION",
@@ -213,7 +217,7 @@ async def crawler(should_run, session, url, data_handler, **kwargs):
                     )
                     break  # stop crawling
 
-                feed_params.update(offset=response["next_page"]["offset"])
+                feed_params.update(offset=float(response["next_page"]["offset"]))
 
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
