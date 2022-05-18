@@ -25,21 +25,20 @@ _connection = None
 
 async def reconnect():
     global _connection
-    if _connection is None:
-        while True:
-            try:
-                _connection = await asyncpg.connect(
-                    user=POSTGRES_USER,
-                    password=POSTGRES_PASSWORD,
-                    database=POSTGRES_DB,
-                    host=POSTGRES_HOST,
-                    port=POSTGRES_PORT,
-                )
-            except Exception as e:
-                logger.error(f"Unable to connect: {e.args}")
-                await asyncio.sleep(DB_ERROR_INTERVAL)
-            else:
-                break
+    while True:
+        try:
+            _connection = await asyncpg.connect(
+                user=POSTGRES_USER,
+                password=POSTGRES_PASSWORD,
+                database=POSTGRES_DB,
+                host=POSTGRES_HOST,
+                port=POSTGRES_PORT,
+            )
+        except Exception as e:
+            logger.error(f"Unable to connect: {e.args}")
+            await asyncio.sleep(DB_ERROR_INTERVAL)
+        else:
+            return _connection
 
 
 async def get_connection():
