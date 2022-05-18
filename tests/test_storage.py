@@ -111,7 +111,6 @@ async def test_drop_feed_position(sleep_mock, collection_mock):
                 "$unset": {
                     "backward_offset": "",
                     "forward_offset": "",
-                    "server_id": "",
                 }
             }
         )

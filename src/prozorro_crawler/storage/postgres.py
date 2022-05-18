@@ -11,7 +11,6 @@ from prozorro_crawler.settings import (
 from .base import (
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
-    SERVER_ID_KEY,
 )
 import asyncpg
 import asyncio
@@ -49,7 +48,6 @@ async def get_connection():
                 f'''
                     CREATE TABLE IF NOT EXISTS {POSTGRES_STATE_TABLE}(
                         id varchar PRIMARY KEY,
-                        {SERVER_ID_KEY} varchar,
                         {FORWARD_OFFSET_KEY} varchar,
                         {BACKWARD_OFFSET_KEY} varchar
                     )
@@ -66,14 +64,6 @@ async def get_connection():
 async def close_connection():
     conn = await get_connection()
     await conn.close()
-
-
-async def unlock_feed_position():
-    raise NotImplementedError
-
-
-async def lock_feed_position():
-    raise NotImplementedError
 
 
 async def handle_exception(e):
@@ -102,17 +92,17 @@ async def save_feed_position(data):
     offset_key = FORWARD_OFFSET_KEY if FORWARD_OFFSET_KEY in data else BACKWARD_OFFSET_KEY
     result = await execute_command(
         f"UPDATE {POSTGRES_STATE_TABLE} "
-        f"SET {SERVER_ID_KEY} = $1, {offset_key} = $2"
-        "WHERE id = $3",
-        data[SERVER_ID_KEY],
+        f"SET {offset_key} = $1"
+        "WHERE id = $2",
         str(data[offset_key]),
         POSTGRES_STATE_ID,
     )
     if result == "UPDATE 0":  # "UPDATE 1" is expected
         result = await execute_command(
-            f"INSERT INTO {POSTGRES_STATE_TABLE} VALUES($1, $2, $3, $4)",
+            f"INSERT INTO {POSTGRES_STATE_TABLE} "
+            f"(id, {FORWARD_OFFSET_KEY}, {BACKWARD_OFFSET_KEY})"
+            f"VALUES($1, $2, $3)",
             POSTGRES_STATE_ID,
-            data.get(SERVER_ID_KEY),
             str(data.get(FORWARD_OFFSET_KEY, "")),
             str(data.get(BACKWARD_OFFSET_KEY, "")),
         )

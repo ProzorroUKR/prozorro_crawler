@@ -14,32 +14,18 @@ from prozorro_crawler.settings import (
     NO_ITEMS_INTERVAL,
     TOO_MANY_REQUESTS_INTERVAL,
     API_MODE,
-    DATE_MODIFIED_SKIP_STATUSES,
-    DATE_MODIFIED_LOCK_ENABLED,
-    DATE_MODIFIED_MARGIN_SECONDS,
 )
 from prozorro_crawler.storage import (
-    lock_feed_position,
     save_feed_position,
     get_feed_position,
-    unlock_feed_position,
     drop_feed_position,
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
-    SERVER_ID_KEY,
-    LOCK_DATE_MODIFIED_KEY,
-    LATEST_DATE_MODIFIED_KEY,
 )
 from prozorro_crawler.utils import (
-    get_session_server_id,
     get_offset_key,
     get_date_modified_key,
-    parse_dt_string,
-    SERVER_ID_COOKIE_NAME,
 )
-
-
-DATE_MODIFIED_MARGIN = timedelta(seconds=DATE_MODIFIED_MARGIN_SECONDS)
 
 
 async def init_crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
@@ -72,9 +58,6 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
             )
             forward_offset = feed_position[FORWARD_OFFSET_KEY]
             backward_offset = feed_position[BACKWARD_OFFSET_KEY]
-            server_id = feed_position.get(SERVER_ID_KEY)
-            if server_id:
-                session.cookie_jar.update_cookies({SERVER_ID_COOKIE_NAME: server_id})
         else:
             backward_offset, forward_offset = await init_feed(
                 should_run,
@@ -205,9 +188,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                         session, url, response, descending=feed_params["descending"]
                     )
 
-                if await check_crawler_should_stop(
-                    session, url, response, descending=feed_params["descending"]
-                ):
+                elif feed_params["descending"]:
                     logger.info(
                         "Stop backward crawling",
                         extra={
@@ -215,7 +196,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                             "FEED_URL": url,
                         }
                     )
-                    break  # stop crawling
+                    break  # got all ancient stuff; stop crawling
 
                 feed_params.update(offset=float(response["next_page"]["offset"]))
 
@@ -249,8 +230,13 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                         "FEED_URL": url,
                     }
                 )
-                await drop_crawler_position(
-                    session, url, descending=feed_params["descending"]
+                await drop_feed_position()
+                logger.info(
+                    f"Drop feed position.",
+                    extra={
+                        "MESSAGE_ID": "CRAWLER_DROP_FEED_POSITION",
+                        "FEED_URL": url,
+                    }
                 )
                 break  # stop crawling
             else:
@@ -290,95 +276,10 @@ def get_feed_params(**kwargs):
 
 
 async def save_crawler_position(session, url, response, descending=False):
-    feed_position_data = {}
-
-    if response["data"]:
-        feed_position = await get_feed_position()
-        if (
-            not feed_position or
-            not DATE_MODIFIED_LOCK_ENABLED or
-            not feed_position.get(LOCK_DATE_MODIFIED_KEY, False)
-        ):
-            date_modified = get_feed_date_modified(response)
-            if date_modified:
-                feed_position_data[get_date_modified_key(descending)] = date_modified
-        else:
-            logger.debug(
-                f"Skip save date modified position for locked crawler position.",
-                extra={
-                    "MESSAGE_ID": "CRAWLER_SKIP_SAVE_DATE_MODIFIED",
-                    "FEED_URL": url,
-                }
-            )
-
-    feed_position_data[get_offset_key(descending)] = response["next_page"]["offset"]
-    feed_position_data[SERVER_ID_KEY] = get_session_server_id(session)
+    date_modified_key = get_date_modified_key(descending)
+    offset_key = get_offset_key(descending)
+    feed_position_data = {
+        date_modified_key: response["data"][-1]["dateModified"],
+        offset_key: response["next_page"]["offset"]
+    }
     await save_feed_position(feed_position_data)
-
-
-async def drop_crawler_position(session, url, descending=False):
-    await drop_feed_position()
-    logger.info(
-        f"Drop feed position.",
-        extra={
-            "MESSAGE_ID": "CRAWLER_DROP_FEED_POSITION",
-            "FEED_URL": url,
-        }
-    )
-    if DATE_MODIFIED_LOCK_ENABLED:
-        await lock_feed_position()
-        logger.info(
-            f"Lock feed position date modified.",
-            extra={
-                "MESSAGE_ID": "CRAWLER_LOCK_DATE_MODIFIED",
-                "FEED_URL": url,
-            }
-        )
-
-
-async def check_crawler_should_stop(session, url, response, descending=False):
-    if not response["data"] and descending:
-        # got all ancient stuff
-        return True
-
-    if response["data"] and descending and DATE_MODIFIED_LOCK_ENABLED:
-        feed_position = await get_feed_position()
-        date_modified = get_feed_date_modified(response)
-        date_modified_saved = feed_position.get(LATEST_DATE_MODIFIED_KEY)
-        if date_modified and date_modified_saved and parse_dt_string(date_modified) < (
-            parse_dt_string(date_modified_saved) - DATE_MODIFIED_MARGIN
-        ):
-            logger.info(
-                f"Reached saved dateModified {date_modified_saved} + "
-                f"{DATE_MODIFIED_MARGIN_SECONDS} seconds.",
-                extra={
-                    "MESSAGE_ID": "CRAWLER_DATE_MODIFIED_REACHED",
-                    "FEED_URL": url,
-                }
-            )
-            await unlock_feed_position()
-            logger.info(
-                f"Unlock feed position date modified.",
-                extra={
-                    "MESSAGE_ID": "CRAWLER_UNLOCK_DATE_MODIFIED",
-                    "FEED_URL": url,
-                }
-            )
-            return True
-
-    return False
-
-
-def get_feed_date_modified(response):
-    for item in reversed(response["data"]):
-        date_modified = item.get("dateModified")
-        if date_modified:
-            status = item.get("status")
-            # skip statuses where item doesn't change its date modified
-            # so that we skip outdated date modified
-            # Example:
-            # tender doesn't change date modified in active.tendering on bidding
-            if not status or status not in DATE_MODIFIED_SKIP_STATUSES:
-                return date_modified
-            else:
-                logger.debug(f"Ignore date modified for feed item in {status} status")
