@@ -121,7 +121,7 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
     while should_run():
         try:
             resp = await session.get(url, params=feed_params)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(
                 f"Init feed {type(e)}: {e}",
                 extra={
@@ -178,7 +178,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
         )
         try:
             resp = await session.get(url, params=feed_params)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.warning(
                 f"Crawler {type(e)}: {e}",
                 extra={
