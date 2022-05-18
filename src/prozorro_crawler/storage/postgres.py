@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 _connection = None
 
 
-async def get_connection():
+async def reconnect():
     global _connection
     if _connection is None:
         while True:
@@ -41,24 +41,27 @@ async def get_connection():
             else:
                 break
 
-        while True:
-            try:
-                await _connection.execute(
-                    f'''
-                        CREATE TABLE IF NOT EXISTS {POSTGRES_STATE_TABLE}(
-                            id varchar PRIMARY KEY,
-                            {SERVER_ID_KEY} varchar,
-                            {FORWARD_OFFSET_KEY} varchar,
-                            {BACKWARD_OFFSET_KEY} varchar
-                        )
-                    '''
-                )
-            except Exception as e:
-                logger.error(f"sql command error: {e.args}")
-                await asyncio.sleep(DB_ERROR_INTERVAL)
-            else:
-                break
-    return _connection
+
+async def get_connection():
+    connection = await reconnect()
+    while True:
+        try:
+            await connection.execute(
+                f'''
+                    CREATE TABLE IF NOT EXISTS {POSTGRES_STATE_TABLE}(
+                        id varchar PRIMARY KEY,
+                        {SERVER_ID_KEY} varchar,
+                        {FORWARD_OFFSET_KEY} varchar,
+                        {BACKWARD_OFFSET_KEY} varchar
+                    )
+                '''
+            )
+        except Exception as e:
+            logger.error(f"sql command error: {e.args}")
+            await asyncio.sleep(DB_ERROR_INTERVAL)
+        else:
+            break
+    return connection
 
 
 async def close_connection():
@@ -74,26 +77,31 @@ async def lock_feed_position():
     raise NotImplementedError
 
 
+async def handle_exception(e):
+    logger.warning(f"sql command error: {e.args}")
+    if e.args and "connection is closed" in e.args[0]:
+        await reconnect()
+    await asyncio.sleep(DB_ERROR_INTERVAL)
+
+
 async def get_feed_position():
-    conn = await get_connection()
     while True:
+        conn = await get_connection()
         try:
             row = await conn.fetchrow(
                 f'SELECT * FROM {POSTGRES_STATE_TABLE} WHERE id = $1',
                 POSTGRES_STATE_ID,
             )
         except Exception as e:
-            logger.warning(f"sql command error: {e.args}")
-            await asyncio.sleep(DB_ERROR_INTERVAL)
+            await handle_exception(e)
         else:
             break
     return row
 
 
 async def save_feed_position(data):
-    conn = await get_connection()
     offset_key = FORWARD_OFFSET_KEY if FORWARD_OFFSET_KEY in data else BACKWARD_OFFSET_KEY
-    result = await conn.execute(
+    result = await execute_command(
         f"UPDATE {POSTGRES_STATE_TABLE} "
         f"SET {SERVER_ID_KEY} = $1, {offset_key} = $2"
         "WHERE id = $3",
@@ -102,7 +110,7 @@ async def save_feed_position(data):
         POSTGRES_STATE_ID,
     )
     if result == "UPDATE 0":  # "UPDATE 1" is expected
-        result = await conn.execute(
+        result = await execute_command(
             f"INSERT INTO {POSTGRES_STATE_TABLE} VALUES($1, $2, $3, $4)",
             POSTGRES_STATE_ID,
             data.get(SERVER_ID_KEY),
@@ -114,12 +122,15 @@ async def save_feed_position(data):
 
 
 async def drop_feed_position():
-    conn = await get_connection()
+    await execute_command(f"DELETE FROM {POSTGRES_STATE_TABLE} WHERE id = $1", POSTGRES_STATE_ID)
+
+
+async def execute_command(comm, *args):
     while True:
+        conn = await get_connection()
         try:
-            await conn.execute(f"DELETE FROM {POSTGRES_STATE_TABLE} WHERE id = $1", POSTGRES_STATE_ID)
+            result = await conn.execute(comm, *args)
         except Exception as e:
-            logger.warning(f"sql command error: {e.args}")
-            await asyncio.sleep(DB_ERROR_INTERVAL)
+            await handle_exception(e)
         else:
-            break
+            return result
