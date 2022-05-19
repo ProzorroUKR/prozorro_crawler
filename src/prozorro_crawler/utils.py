@@ -10,19 +10,16 @@ from prozorro_crawler.storage.base import (
 
 SERVER_ID_COOKIE_NAME = "SERVER_ID"
 
-DEFAULT_HEADERS = {
-    "User-Agent": CRAWLER_USER_AGENT
-}
-if API_TOKEN:
-    DEFAULT_HEADERS["Authorization"] = f"Bearer {API_TOKEN}"
-
 
 def get_resource_url(resource):
     return f"{BASE_URL}/{resource}"
 
 
 def get_default_headers(additional_headers):
-    headers = DEFAULT_HEADERS
+    headers = {}
+    if API_TOKEN:
+        headers["Authorization"] = f"Bearer {API_TOKEN}"
+    headers["User-Agent"] = CRAWLER_USER_AGENT
     if isinstance(additional_headers, dict):
         headers.update(additional_headers)
     return headers
