@@ -1,6 +1,7 @@
+import os
+
 from pythonjsonlogger import jsonlogger
 import logging
-import os
 
 
 def getenv(key, default=None, callback=None):
@@ -10,16 +11,28 @@ def getenv(key, default=None, callback=None):
     return value
 
 
-def warn_mongodb(key, value, default):
-    if value == default:
+def warn_db_conflicts_base(enabled, key, value, default):
+    if enabled and value == default:
         logger.warning(
             f"Environment variable {key} "
             f"casted with default value '{default}'. "
             f"This may cause conflicts if you use "
-            f"one MONGODB_DATABASE for many crawlers, "
+            f"one db for many crawlers, "
             f"better rename to a specific process, "
             f"in order different crawlers don't clash."
         )
+
+
+def warn_db_conflicts(key, value, default):
+    warn_db_conflicts_base(True, key, value, default)
+
+
+def warn_mongodb_conflicts(key, value, default):
+    warn_db_conflicts_base(MONGODB_URL, key, value, default)
+
+
+def warn_postgres_conflicts(key, value, default):
+    warn_db_conflicts_base(POSTGRES_HOST, key, value, default)
 
 
 def warn_crawler_user_agent(key, value, default):
@@ -80,7 +93,7 @@ CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_c
 MONGODB_URL = getenv("MONGODB_URL", "")
 MONGODB_DATABASE = getenv("MONGODB_DATABASE", "prozorro-crawler")
 MONGODB_STATE_COLLECTION = getenv("MONGODB_STATE_COLLECTION", "prozorro-crawler-state")
-MONGODB_STATE_ID = getenv("MONGODB_STATE_ID", "FEED_CRAWLER_STATE", warn_mongodb)
+MONGODB_STATE_ID = getenv("MONGODB_STATE_ID", "FEED_CRAWLER_STATE", warn_mongodb_conflicts)
 
 POSTGRES_HOST = getenv("POSTGRES_HOST", "")
 POSTGRES_PORT = int(getenv("POSTGRES_PORT", 5432))
@@ -88,7 +101,7 @@ POSTGRES_DB = getenv("POSTGRES_DB", "prozorro-crawler")
 POSTGRES_USER = getenv("POSTGRES_USER", "agent")
 POSTGRES_PASSWORD = getenv("POSTGRES_PASSWORD", "kalina")
 POSTGRES_STATE_TABLE = getenv("POSTGRES_STATE_TABLE", "crawler_state")
-POSTGRES_STATE_ID = getenv("POSTGRES_STATE_ID", "crawler_state", warn_mongodb)
+POSTGRES_STATE_ID = getenv("POSTGRES_STATE_ID", "crawler_state", warn_postgres_conflicts)
 
 DB_ERROR_INTERVAL = int(getenv("DB_ERROR_INTERVAL", 5))
 
@@ -98,4 +111,4 @@ LOCK_COLLECTION_NAME = getenv("LOCK_COLLECTION_NAME", "process_lock")
 LOCK_EXPIRE_TIME = int(getenv("LOCK_EXPIRE_TIME", 60))
 LOCK_UPDATE_TIME = int(getenv("LOCK_UPDATE_TIME", 30))
 LOCK_ACQUIRE_INTERVAL = int(getenv("LOCK_ACQUIRE_INTERVAL", 10))
-LOCK_PROCESS_NAME = getenv("LOCK_PROCESS_NAME", "crawler_lock", warn_mongodb)
+LOCK_PROCESS_NAME = getenv("LOCK_PROCESS_NAME", "crawler_lock", warn_db_conflicts)
