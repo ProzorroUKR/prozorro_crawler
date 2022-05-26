@@ -3,53 +3,20 @@ import os
 from pythonjsonlogger import jsonlogger
 import logging
 
+from prozorro_crawler.callbacks import (
+    warn_db_conflicts,
+    warn_mongodb_conflicts,
+    warn_postgres_conflicts,
+    warn_crawler_user_agent,
+    assert_url,
+)
+
 
 def getenv(key, default=None, callback=None):
     value = os.environ.get(key, default)
     if callback:
         callback(key, value, default)
     return value
-
-
-def warn_db_conflicts_base(enabled, key, value, default):
-    if enabled and value == default:
-        logger.warning(
-            f"Environment variable {key} "
-            f"casted with default value '{default}'. "
-            f"This may cause conflicts if you use "
-            f"one db for many crawlers, "
-            f"better rename to a specific process, "
-            f"in order different crawlers don't clash."
-        )
-
-
-def warn_db_conflicts(key, value, default):
-    warn_db_conflicts_base(True, key, value, default)
-
-
-def warn_mongodb_conflicts(key, value, default):
-    warn_db_conflicts_base(MONGODB_URL, key, value, default)
-
-
-def warn_postgres_conflicts(key, value, default):
-    warn_db_conflicts_base(POSTGRES_HOST, key, value, default)
-
-
-def warn_crawler_user_agent(key, value, default):
-    if value == default:
-        logger.warning(
-            f"Using default '{value}' as crawler user agent. "
-            f"To set another user agent set {key} environment variable."
-        )
-    else:
-        logger.info(
-            f"Using '{value}' as crawler user agent."
-        )
-
-
-def assert_url(key, value, default):
-    assert not value.endswith("/")
-    assert value.startswith("http")
 
 
 # logging
@@ -83,10 +50,6 @@ API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
 API_TOKEN = getenv("API_TOKEN")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
-
-DATE_MODIFIED_LOCK_ENABLED = bool(getenv("DATE_MODIFIED_LOCK_ENABLED", False))
-DATE_MODIFIED_SKIP_STATUSES = getenv("DATE_MODIFIED_SKIP_STATUSES", "").split(",")
-DATE_MODIFIED_MARGIN_SECONDS = int(getenv("DATE_MODIFIED_MARGIN_SECONDS", 86400))
 
 CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
 
