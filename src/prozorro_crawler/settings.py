@@ -72,7 +72,7 @@ logger.addHandler(logHandler)
 FEED_STEP_INTERVAL = int(getenv("FEED_STEP_INTERVAL", 0))
 TOO_MANY_REQUESTS_INTERVAL = int(getenv("TOO_MANY_REQUESTS_INTERVAL", 10))
 CONNECTION_ERROR_INTERVAL = int(getenv("CONNECTION_ERROR_INTERVAL", 5))
-NO_ITEMS_INTERVAL = int(getenv("CONNECTION_ERROR_INTERVAL", 15))
+NO_ITEMS_INTERVAL = int(getenv("NO_ITEMS_INTERVAL", 15))
 GET_ERROR_RETRIES = int(getenv("GET_ERROR_RETRIES", 5))
 
 PUBLIC_API_HOST = getenv("PUBLIC_API_HOST", "https://public-api-sandbox.prozorro.gov.ua", assert_url)
