@@ -12,7 +12,6 @@ from .base import (
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
     SERVER_ID_KEY,
-    LOCK_DATE_MODIFIED_KEY,
 )
 import asyncio
 
@@ -68,38 +67,4 @@ async def drop_feed_position():
             )
         except PyMongoError as e:
             logger.warning(f"Drop feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
-            await asyncio.sleep(DB_ERROR_INTERVAL)
-
-
-async def lock_feed_position():
-    collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
-    while True:
-        try:
-            return await collection.update_one(
-                {"_id": MONGODB_STATE_ID},
-                {
-                    "$set": {
-                        LOCK_DATE_MODIFIED_KEY: True
-                    }
-                }
-            )
-        except PyMongoError as e:
-            logger.warning(f"Lock feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
-            await asyncio.sleep(DB_ERROR_INTERVAL)
-
-
-async def unlock_feed_position():
-    collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
-    while True:
-        try:
-            return await collection.update_one(
-                {"_id": MONGODB_STATE_ID},
-                {
-                    "$set": {
-                        LOCK_DATE_MODIFIED_KEY: False
-                    },
-                }
-            )
-        except PyMongoError as e:
-            logger.warning(f"Unlock feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
             await asyncio.sleep(DB_ERROR_INTERVAL)

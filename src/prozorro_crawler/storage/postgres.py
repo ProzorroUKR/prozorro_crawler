@@ -68,14 +68,6 @@ async def close_connection():
     await conn.close()
 
 
-async def unlock_feed_position():
-    raise NotImplementedError
-
-
-async def lock_feed_position():
-    raise NotImplementedError
-
-
 async def handle_exception(e):
     logger.warning(f"sql command error: {e.args}")
     if e.args and "connection is closed" in e.args[0]:
