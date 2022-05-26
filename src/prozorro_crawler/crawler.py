@@ -110,7 +110,7 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
             resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
             logger.warning(
-                f"Init feed {type(e)}: {e}",
+                f"Init feed exception: {type(e)} {e}",
                 extra={
                     "MESSAGE_ID": "HTTP_EXCEPTION",
                     "FEED_URL": url,
@@ -167,7 +167,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
             logger.warning(
-                f"Crawler {type(e)}: {e}",
+                f"Crawler exception: {type(e)} {e}",
                 extra={
                     "MESSAGE_ID": "HTTP_EXCEPTION",
                     "FEED_URL": url,
