@@ -127,7 +127,9 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
                     continue
 
                 await data_handler(session, response["data"])
-                return float(response["next_page"]["offset"]), float(response["prev_page"]["offset"])
+                next_page_offset = float(response.get("next_page", {}).get("offset") or 0)
+                prev_page_offset = float(response.get("prev_page", {}).get("offset") or 0)
+                return next_page_offset, prev_page_offset
             else:
                 logger.error(
                     "Error on feed initialize request: {} {}".format(
