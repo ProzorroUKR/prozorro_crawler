@@ -42,7 +42,7 @@ async def run_app(
 
     conn = aiohttp.TCPConnector(ttl_dns_cache=300)
     headers = get_default_headers(additional_headers)
-    async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
+    async with aiohttp.ClientSession(connector=conn, headers=headers, trust_env=True) as session:
         url = get_resource_url(resource)
         await init_crawler(
             should_run,
