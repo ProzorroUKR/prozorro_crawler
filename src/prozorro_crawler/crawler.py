@@ -29,6 +29,15 @@ from prozorro_crawler.utils import (
 )
 
 
+def import_offset(page):
+    offset = page["offset"]
+    try:
+        offset = float(offset)
+    except ValueError:
+        pass
+    return offset
+
+
 async def init_crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
     logger.info(
         f"Start crawling",
@@ -127,8 +136,8 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
                     continue
 
                 await data_handler(session, response["data"])
-                next_page_offset = float(response.get("next_page", {}).get("offset") or 0)
-                prev_page_offset = float(response.get("prev_page", {}).get("offset") or 0)
+                next_page_offset = import_offset(response.get("next_page", {})) or 0
+                prev_page_offset = import_offset(response.get("prev_page", {})) or 0
                 return next_page_offset, prev_page_offset
             else:
                 logger.error(
@@ -208,7 +217,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                     )
                     break  # got all ancient stuff; stop crawling
 
-                feed_params.update(offset=float(response["next_page"]["offset"]))
+                feed_params.update(offset=import_offset(response["next_page"]))
 
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
