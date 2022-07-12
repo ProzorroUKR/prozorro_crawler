@@ -30,7 +30,7 @@ from prozorro_crawler.utils import (
 
 
 def import_offset(page):
-    offset = page["offset"]
+    offset = page.get("offset")
     try:
         offset = float(offset)
     except ValueError:
