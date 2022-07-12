@@ -33,7 +33,7 @@ def import_offset(page):
     offset = page.get("offset")
     try:
         offset = float(offset)
-    except ValueError:
+    except (ValueError, TypeError):
         pass
     return offset
 
