@@ -136,8 +136,8 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
                     continue
 
                 await data_handler(session, response["data"])
-                next_page_offset = import_offset(response.get("next_page", {})) or 0
-                prev_page_offset = import_offset(response.get("prev_page", {})) or 0
+                next_page_offset = import_offset(response.get("next_page", {})) or ""
+                prev_page_offset = import_offset(response.get("prev_page", {})) or ""
                 return next_page_offset, prev_page_offset
             else:
                 logger.error(
