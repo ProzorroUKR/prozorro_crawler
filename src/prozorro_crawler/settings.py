@@ -1,4 +1,5 @@
 import os
+import pytz
 
 from pythonjsonlogger import jsonlogger
 import logging
@@ -75,3 +76,9 @@ LOCK_EXPIRE_TIME = int(getenv("LOCK_EXPIRE_TIME", 60))
 LOCK_UPDATE_TIME = int(getenv("LOCK_UPDATE_TIME", 30))
 LOCK_ACQUIRE_INTERVAL = int(getenv("LOCK_ACQUIRE_INTERVAL", 10))
 LOCK_PROCESS_NAME = getenv("LOCK_PROCESS_NAME", "crawler_lock", warn_db_conflicts)
+
+# offsets
+BACKWARD_OFFSET = getenv("BACKWARD_OFFSET", "")
+FORWARD_OFFSET = getenv("FORWARD_OFFSET", "")
+TIMEZONE = pytz.timezone(os.getenv("TIMEZONE", "Europe/Kiev"))
+FORWARD_CHANGES_COOLDOWN_SECONDS = int(getenv("FORWARD_CHANGES_COOLDOWN_SECONDS", 0))
