@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import aiohttp
 import asyncio
 import json
@@ -12,6 +14,10 @@ from prozorro_crawler.settings import (
     NO_ITEMS_INTERVAL,
     TOO_MANY_REQUESTS_INTERVAL,
     API_MODE,
+    BACKWARD_OFFSET,
+    FORWARD_OFFSET,
+    TIMEZONE,
+    FORWARD_CHANGES_COOLDOWN_SECONDS,
 )
 from prozorro_crawler.storage import (
     save_feed_position,
@@ -71,6 +77,9 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
             server_id = feed_position.get(SERVER_ID_KEY)
             if server_id:
                 session.cookie_jar.update_cookies({SERVER_ID_COOKIE_NAME: server_id})
+        elif BACKWARD_OFFSET and FORWARD_OFFSET:
+            backward_offset = BACKWARD_OFFSET
+            forward_offset = FORWARD_OFFSET
         else:
             backward_offset, forward_offset = await init_feed(
                 should_run,
@@ -215,9 +224,20 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                             "FEED_URL": url,
                         }
                     )
+                    if BACKWARD_OFFSET:
+                        offset_key = get_offset_key(feed_params["descending"])
+                        await save_feed_position({
+                            SERVER_ID_KEY: get_session_server_id(session),
+                            offset_key: response["next_page"]["offset"]
+                        })
                     break  # got all ancient stuff; stop crawling
 
                 feed_params.update(offset=import_offset(response["next_page"]))
+
+                if (
+                    datetime.now(TIMEZONE).timestamp() - import_offset(response["next_page"])
+                ) < FORWARD_CHANGES_COOLDOWN_SECONDS:
+                    await asyncio.sleep(FORWARD_CHANGES_COOLDOWN_SECONDS)
 
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
