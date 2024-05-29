@@ -18,6 +18,7 @@ from prozorro_crawler.settings import (
     FORWARD_OFFSET,
     TIMEZONE,
     FORWARD_CHANGES_COOLDOWN_SECONDS,
+    SLEEP_FORWARD_CHANGES_SECONDS,
 )
 from prozorro_crawler.storage import (
     save_feed_position,
@@ -237,7 +238,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                 if (
                     datetime.now(TIMEZONE).timestamp() - import_offset(response["next_page"])
                 ) < FORWARD_CHANGES_COOLDOWN_SECONDS:
-                    await asyncio.sleep(FORWARD_CHANGES_COOLDOWN_SECONDS)
+                    await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
 
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
