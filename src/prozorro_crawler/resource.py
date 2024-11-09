@@ -26,37 +26,42 @@ async def get_response_data(session, url, json_loads=json.loads, error_retries=G
                 extra={"MESSAGE_ID": "HTTP_EXCEPTION"}
             )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-        else:
-            if resp.status == 200:
-                try:
-                    response = await resp.json(loads=json_loads)
-                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
-                    logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
-                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-                else:
-                    return response["data"]
-            elif resp.status == 429:
+            continue
+        
+        if resp.status == 429:
+            logger.warning(
+                "Too many requests while getting tender",
+                extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"}
+            )
+            await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
+            continue
+
+        elif resp.status != 200:
+            error_message = "Error on getting tender: {} {}".format(
+                resp.status, 
+                await resp.text()
+            )
+            
+            if error_retries > 1:
                 logger.warning(
-                    "Too many requests while getting tender",
-                    extra={"MESSAGE_ID": "TOO_MANY_REQUESTS"}
+                    error_message,
+                    extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
                 )
-                await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
-            else:
-                if error_retries > 1:
-                    logger.warning(
-                        "Error on getting tender: {} {}".format(
-                            resp.status,
-                            await resp.text()
-                        ),
-                        extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
-                    )
-                    error_retries -= 1
-                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-                else:
-                    return logger.error(
-                        "Error on getting tender: {} {}".format(
-                            resp.status,
-                            await resp.text()
-                        ),
-                        extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
-                    )
+                error_retries -= 1
+                await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+                continue
+            
+            logger.error(
+                error_message,
+                extra={"MESSAGE_ID": "REQUEST_UNEXPECTED_ERROR"}
+            )
+            break
+
+        try:
+            response = await resp.json(loads=json_loads)
+        except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+            logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+            continue
+
+        return response["data"]
