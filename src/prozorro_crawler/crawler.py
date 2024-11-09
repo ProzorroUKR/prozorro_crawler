@@ -249,8 +249,9 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                         await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
 
                 # Less than API_LIMIT items received
-                # That's mean we got all stuff from feed
-                # Wait before next request
+                # That's mean we got all stuff from feed for now
+                # Wait before next request to avoid flooding the server
+                # and to give some time for new data to appear in feed
                 if len(response["data"]) < API_LIMIT:
                     await asyncio.sleep(NO_ITEMS_INTERVAL)
 
