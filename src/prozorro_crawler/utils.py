@@ -1,8 +1,10 @@
+from datetime import datetime
 from prozorro_crawler.settings import (
     PUBLIC_API_HOST,
     CRAWLER_USER_AGENT,
     BASE_URL,
     API_TOKEN,
+    TIMEZONE,
 )
 from prozorro_crawler.storage.base import (
     BACKWARD_OFFSET_KEY,
@@ -41,3 +43,10 @@ def get_offset_key(descending=False):
 
 def get_date_modified_key(descending=False):
     return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY
+
+
+def get_offest_age(offset):
+    try:    
+        return datetime.now(TIMEZONE).timestamp() - float(offset)
+    except (TypeError, ValueError):
+        return None
