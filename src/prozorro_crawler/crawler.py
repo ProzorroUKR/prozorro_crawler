@@ -350,6 +350,14 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             elif offest_age < FORWARD_CHANGES_COOLDOWN_SECONDS:
                 # Pause processing to allow the forward page to stabilize
                 # This helps avoid processing rapidly changing records
+                logger.info(
+                    f"New data is less than {FORWARD_CHANGES_COOLDOWN_SECONDS} seconds old, "
+                    f"sleeping for {SLEEP_FORWARD_CHANGES_SECONDS} seconds",
+                    extra={
+                        "MESSAGE_ID": "SLEEP_FORWARD_CHANGES",
+                        "FEED_URL": url,
+                    }
+                )
                 await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
 
         # Less than API_LIMIT items received
