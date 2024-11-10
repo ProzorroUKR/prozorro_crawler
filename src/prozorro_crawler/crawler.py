@@ -33,23 +33,39 @@ from prozorro_crawler.utils import (
     SERVER_ID_COOKIE_NAME,
 )
 
+DEFAULT_FEED_PARAMS = dict(
+    descending="",
+    offset="",
+    limit=API_LIMIT,
+    opt_fields=",".join(API_OPT_FIELDS),
+    mode=API_MODE,
+)
 
 async def init_crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
+    """
+    Crawlers start point
+    Initialize two crawlers and run them in parallel
+    Forward crawler: waiting for new data
+    Backward crawler: processing all ancient data
+    """
     logger.info(
-        f"Start crawling",
+        "Start crawling",
         extra={
             "MESSAGE_ID": "START_CRAWLING",
             "FEED_URL": url,
         }
     )
+    
+    # At the end of this block we await for forward and backward crawlers
+    # Backward crawler finishes when there're no results.
+    # Forward crawler finishes only on 404 (when offset is invalid)
+    # in this case the whole process should be reinitialized
     while should_run():
-        """
-        At the end of this block we await for forward and backward crawlers
-        Backward crawler finishes when there're no results.
-        Forward crawler finishes only on 404 (when offset is invalid)
-        in this case the whole process should be reinitialized
-        """
+
+        # Get current feed position from storage
         feed_position = await get_feed_position()
+        
+        # If we have saved position, use it
         if (
             feed_position
             and BACKWARD_OFFSET_KEY in feed_position
@@ -64,12 +80,16 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
             )
             forward_offset = feed_position[FORWARD_OFFSET_KEY]
             backward_offset = feed_position[BACKWARD_OFFSET_KEY]
-            server_id = feed_position.get(SERVER_ID_KEY)
-            if server_id:
+
+            if server_id := feed_position.get(SERVER_ID_KEY):
                 session.cookie_jar.update_cookies({SERVER_ID_COOKIE_NAME: server_id})
+
+        # If we don't have saved position, use default offsets if they are set
         elif BACKWARD_OFFSET and FORWARD_OFFSET:
             backward_offset = BACKWARD_OFFSET
             forward_offset = FORWARD_OFFSET
+
+        # If we don't have default offsets, initialize feed from scratch
         else:
             backward_offset, forward_offset = await init_feed(
                 should_run,
@@ -79,8 +99,11 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
                 json_loads=json_loads,
                 **kwargs,
             )
+
+        # Run 2 crawlers in parallel
         await asyncio.gather(
-            # forward crawler
+            # Forward crawler
+            # It should run forever waiting for new data
             crawler(
                 should_run,
                 session,
@@ -88,9 +111,10 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
                 data_handler,
                 json_loads=json_loads,
                 offset=forward_offset,
-                **kwargs,
+                **kwargs
             ),
-            # backward crawler
+            # Backward crawler
+            # It should run until all ancient data is processed
             crawler(
                 should_run,
                 session,
@@ -99,22 +123,30 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
                 json_loads=json_loads,
                 offset=backward_offset,
                 descending="1",
-                **kwargs,
+                **kwargs
             ),
         )
 
 
 async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs):
-    feed_params = get_feed_params(descending="1", **kwargs)
+    feed_params = DEFAULT_FEED_PARAMS.copy()
+    feed_params.update(kwargs)
+
+    # Initialize crawler from feed head (newest data)
+    feed_params["descending"] = "1"
+
     logger.info(
         "Crawler initialization",
         extra={
             "MESSAGE_ID": "CRAWLER_INIT",
             "FEED_URL": url,
+            "FEED_PARAMS": feed_params,
         }
     )
+
     while should_run():
         try:
+            # Make request to feed head
             resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
             logger.warning(
@@ -125,35 +157,44 @@ async def init_feed(should_run, session, url, data_handler, json_loads, **kwargs
                 }
             )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-        else:
-            if resp.status == 200:
-                try:
-                    response = await resp.json(loads=json_loads)
-                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
-                    logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
-                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-                    continue
+            continue
 
-                await data_handler(session, response["data"])
-                next_page_offset = response.get("next_page", {}).get("offset") or ""
-                prev_page_offset = response.get("prev_page", {}).get("offset") or ""
-                return next_page_offset, prev_page_offset
-            else:
-                logger.error(
-                    "Error on feed initialize request: {} {}".format(
-                        resp.status,
-                        await resp.text()
-                    ),
-                    extra={
-                        "MESSAGE_ID": "FEED_ERROR",
-                        "FEED_URL": url,
-                    }
-                )
+        if resp.status != 200:
+            logger.error(
+                f"Error on feed initialize request: {resp.status} {await resp.text()}",
+                extra={
+                    "MESSAGE_ID": "FEED_ERROR",
+                    "FEED_URL": url,
+                }
+            )
             await asyncio.sleep(FEED_STEP_INTERVAL)
+            continue
+
+        # No errors, try to parse response
+        try:
+            response = await resp.json(loads=json_loads)
+        except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+            logger.warning(e, extra={"MESSAGE_ID": "HTTP_EXCEPTION"})
+            await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+            continue
+
+        # Process data
+        await data_handler(session, response["data"])
+
+        # Return offsets for crawlers
+        return (
+            response.get("next_page", {}).get("offset") or "",
+            response.get("prev_page", {}).get("offset") or ""
+        )
 
 
 async def crawler(should_run, session, url, data_handler, json_loads=json.loads, **kwargs):
-    feed_params = get_feed_params(**kwargs)
+    """
+    Single crawler loop
+    """
+    feed_params = DEFAULT_FEED_PARAMS.copy()
+    feed_params.update(kwargs)
+
     logger.info(
         "Crawler started",
         extra={
@@ -162,6 +203,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             "FEED_PARAMS": feed_params,
         }
     )
+    
     while should_run():
         logger.debug(
             "Feed request",
@@ -173,7 +215,9 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                 # "TASKS_LEN": len(asyncio.all_tasks()),
             }
         )
+
         try:
+            # Make request to feed
             resp = await session.get(url, params=feed_params)
         except aiohttp.ClientError as e:
             logger.warning(
@@ -184,128 +228,142 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                 }
             )
             await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-        else:
-            if resp.status == 200:
-                try:
-                    response = await resp.json(loads=json_loads)
-                except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
-                    logger.warning(e, extra={
-                        "MESSAGE_ID": "HTTP_EXCEPTION",
-                        "FEED_URL": url,
-                    })
-                    await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
-                    continue
+            continue
 
-                if response["data"]:
-                    # Got new data
-                    # Process it
-                    await data_handler(session, response["data"])
-                    # Save new position
-                    date_modified_key = get_date_modified_key(feed_params["descending"])
-                    offset_key = get_offset_key(feed_params["descending"])
-                    await save_feed_position({
-                        SERVER_ID_KEY: get_session_server_id(session),
-                        date_modified_key: response["data"][-1]["dateModified"],
-                        offset_key: response["next_page"]["offset"]
-                    })
-
-                elif feed_params["descending"]:
-                    # Got empty response for backward crawler
-                    # That's mean we got all ancient stuff
-                    # Time to stop backward crawler
-                    logger.info(
-                        "Stop backward crawling",
-                        extra={
-                            "MESSAGE_ID": "BACK_CRAWLER_STOP",
-                            "FEED_URL": url,
-                        }
-                    )
-                    if BACKWARD_OFFSET:
-                        offset_key = get_offset_key(feed_params["descending"])
-                        await save_feed_position({
-                            SERVER_ID_KEY: get_session_server_id(session),
-                            offset_key: response["next_page"]["offset"]
-                        })
-                    # Stop crawling
-                    break  
-
-                feed_params.update(offset=response["next_page"]["offset"])
-
-                # Ensure new forward page is cooked enough
-                if FORWARD_CHANGES_COOLDOWN_SECONDS and SLEEP_FORWARD_CHANGES_SECONDS:
-                    offest_age = get_offest_age(response["next_page"]["offset"])
-                    if offest_age is None:
-                        logger.critical(
-                            f"Can't detect offset age for cooldown, "
-                            f"probably offset has invalid format: {response['next_page']['offset']}",
-                            extra={
-                                "MESSAGE_ID": "INVALID_OFFSET",
-                                "FEED_URL": url,
-                            }
-                        )
-                    elif offest_age < FORWARD_CHANGES_COOLDOWN_SECONDS:
-                        # Pause processing to allow the forward page to stabilize
-                        # This helps avoid processing rapidly changing records
-                        await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
-
-                # Less than API_LIMIT items received
-                # That's mean we got all stuff from feed for now
-                # Wait before next request to avoid flooding the server
-                # and to give some time for new data to appear in feed
-                if len(response["data"]) < API_LIMIT:
-                    await asyncio.sleep(NO_ITEMS_INTERVAL)
-
-            elif resp.status == 429:
-                logger.warning(
-                    "Too many requests while getting feed",
-                    extra={
-                        "MESSAGE_ID": "TOO_MANY_REQUESTS",
-                        "FEED_URL": url,
-                    }
-                )
-                await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
-
-            elif resp.status == 412:
-                logger.warning(
-                    "Precondition failed",
-                    extra={
-                        "MESSAGE_ID": "PRECONDITION_FAILED",
-                        "FEED_URL": url,
-                    }
-                )
-
-            elif resp.status == 404:
-                logger.error(
-                    "Offset expired/invalid",
-                    extra={
-                        "MESSAGE_ID": "OFFSET_INVALID",
-                        "FEED_URL": url,
-                    }
-                )
-                await drop_feed_position()
-                logger.info(
-                    f"Drop feed position.",
-                    extra={
-                        "MESSAGE_ID": "CRAWLER_DROP_FEED_POSITION",
-                        "FEED_URL": url,
-                    }
-                )
-                # The feed is messed up for some reason
-                # Stop crawling
-                break 
-            else:
-                logger.error(
-                    "Crawler request error: {} {}".format(
-                        resp.status,
-                        await resp.text()
-                    ),
-                    extra={
-                        "MESSAGE_ID": "FEED_UNEXPECTED_ERROR",
-                        "FEED_URL": url,
-                    }
-                )
+        if resp.status == 429:
+            logger.warning(
+                "Too many requests while getting feed",
+                extra={
+                    "MESSAGE_ID": "TOO_MANY_REQUESTS",
+                    "FEED_URL": url,
+                }
+            )
+            await asyncio.sleep(TOO_MANY_REQUESTS_INTERVAL)
             await asyncio.sleep(FEED_STEP_INTERVAL)
+            continue
 
+        elif resp.status == 412:
+            logger.warning(
+                "Precondition failed",
+                extra={
+                    "MESSAGE_ID": "PRECONDITION_FAILED",
+                    "FEED_URL": url,
+                }
+            )
+            await asyncio.sleep(FEED_STEP_INTERVAL)
+            continue
+
+        elif resp.status == 404:
+            logger.error(
+                "Invalid offset",
+                extra={
+                    "MESSAGE_ID": "OFFSET_INVALID",
+                    "FEED_URL": url,
+                }
+            )
+            await drop_feed_position()
+            logger.info(
+                f"Drop feed position.",
+                extra={
+                    "MESSAGE_ID": "CRAWLER_DROP_FEED_POSITION",
+                    "FEED_URL": url,
+                }
+            )
+            # The feed is messed up for some reason
+            # Stop crawling
+            break 
+
+        elif resp.status != 200:
+            logger.error(
+                "Crawler request error: {} {}".format(
+                    resp.status,
+                    await resp.text()
+                ),
+                extra={
+                    "MESSAGE_ID": "FEED_UNEXPECTED_ERROR",
+                    "FEED_URL": url,
+                }
+            )
+            await asyncio.sleep(FEED_STEP_INTERVAL)
+            continue
+
+        # No errors, try to parse response
+        try:
+            response = await resp.json(loads=json_loads)
+        except (aiohttp.ClientPayloadError, JSONDecodeError) as e:
+            logger.warning(e, extra={
+                "MESSAGE_ID": "HTTP_EXCEPTION",
+                "FEED_URL": url,
+            })
+            await asyncio.sleep(CONNECTION_ERROR_INTERVAL)
+            continue
+
+        if not response["data"] and feed_params["descending"]:
+            # Got empty response for backward crawler
+            # That's mean we got all ancient stuff
+            # Time to stop backward crawler
+            logger.info(
+                "Stop backward crawling",
+                extra={
+                    "MESSAGE_ID": "BACK_CRAWLER_STOP",
+                    "FEED_URL": url,
+                }
+            )
+            if BACKWARD_OFFSET:
+                offset_key = get_offset_key(feed_params["descending"])
+                await save_feed_position({
+                    SERVER_ID_KEY: get_session_server_id(session),
+                    offset_key: response["next_page"]["offset"]
+                })
+            # Stop crawling
+            break  
+
+        # Check if we got new data
+        if response["data"]:
+            # Weeeee, got new data
+            # Process it
+            await data_handler(session, response["data"])
+            # Save new position
+            date_modified_key = get_date_modified_key(feed_params["descending"])
+            offset_key = get_offset_key(feed_params["descending"])
+            await save_feed_position({
+                SERVER_ID_KEY: get_session_server_id(session),
+                date_modified_key: response["data"][-1]["dateModified"],
+                offset_key: response["next_page"]["offset"]
+            })
+
+        # Update feed params with new offset for next request
+        feed_params.update(offset=response["next_page"]["offset"])
+
+        # Ensure new forward page is cooked enough
+        if FORWARD_CHANGES_COOLDOWN_SECONDS and SLEEP_FORWARD_CHANGES_SECONDS:
+            offest_age = get_offest_age(response["next_page"]["offset"])
+            if offest_age is None:
+                logger.critical(
+                    f"Can't detect offset age for cooldown, "
+                    f"probably offset has invalid format: {response['next_page']['offset']}",
+                    extra={
+                        "MESSAGE_ID": "INVALID_OFFSET",
+                        "FEED_URL": url,
+                    }
+                )
+            elif offest_age < FORWARD_CHANGES_COOLDOWN_SECONDS:
+                # Pause processing to allow the forward page to stabilize
+                # This helps avoid processing rapidly changing records
+                await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
+
+        # Less than API_LIMIT items received
+        # That's mean we got all stuff from feed for now
+        # Wait before next request to avoid flooding the server
+        # and to give some time for new data to appear in feed
+        if len(response["data"]) < API_LIMIT:
+            await asyncio.sleep(NO_ITEMS_INTERVAL)
+
+        # Wait before next request
+        await asyncio.sleep(FEED_STEP_INTERVAL)
+
+    # Left crawler loop
+    # Crawler is done
     logger.info(
         "Crawler stopped",
         extra={
@@ -314,16 +372,3 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             "FEED_PARAMS": feed_params,
         }
     )
-
-
-def get_feed_params(**kwargs):
-    feed_params = dict(
-        feed="changes",
-        descending="",
-        offset="",
-        limit=API_LIMIT,
-        opt_fields=",".join(API_OPT_FIELDS),
-        mode=API_MODE,
-    )
-    feed_params.update(kwargs)
-    return feed_params
