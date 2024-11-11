@@ -45,7 +45,7 @@ def get_date_modified_key(descending=False):
     return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY
 
 
-def get_offest_age(offset):
+def get_offset_age(offset):
     """
     Get age of offset in seconds
     Offset has format like "1731103209.0000000001"
