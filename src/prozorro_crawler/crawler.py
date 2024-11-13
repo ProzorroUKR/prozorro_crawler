@@ -26,7 +26,7 @@ from prozorro_crawler.storage import (
     SERVER_ID_KEY,
 )
 from prozorro_crawler.utils import (
-    get_offest_age,
+    get_offset_age,
     get_session_server_id,
     get_offset_key,
     get_date_modified_key,
@@ -86,6 +86,7 @@ async def init_crawler(should_run, session, url, data_handler, json_loads=json.l
 
         # If we don't have saved position, use default offsets if they are set
         elif BACKWARD_OFFSET and FORWARD_OFFSET:
+            # Only used in first initialization if no saved position in db
             backward_offset = BACKWARD_OFFSET
             forward_offset = FORWARD_OFFSET
 
@@ -203,8 +204,34 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             "FEED_PARAMS": feed_params,
         }
     )
-    
+
     while should_run():
+        # Ensure new forward page is cooked enough
+        if FORWARD_CHANGES_COOLDOWN_SECONDS and SLEEP_FORWARD_CHANGES_SECONDS:
+            offset_age = get_offset_age(feed_params["offset"])
+            if offset_age is None:
+                logger.critical(
+                    f"Can't detect offset age for cooldown, "
+                    f"probably offset has invalid format: {feed_params['offset']}",
+                    extra={
+                        "MESSAGE_ID": "INVALID_OFFSET",
+                        "FEED_URL": url,
+                    }
+                )
+            elif offset_age < FORWARD_CHANGES_COOLDOWN_SECONDS:
+                # Pause processing to allow the forward page to stabilize
+                # This helps avoid processing rapidly changing records
+                logger.info(
+                    f"New data is less than {FORWARD_CHANGES_COOLDOWN_SECONDS} seconds old, "
+                    f"sleeping for {SLEEP_FORWARD_CHANGES_SECONDS} seconds",
+                    extra={
+                        "MESSAGE_ID": "SLEEP_FORWARD_CHANGES",
+                        "FEED_URL": url,
+                    }
+                )
+                await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
+                continue
+
         logger.debug(
             "Feed request",
             extra={
@@ -310,13 +337,16 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
                 }
             )
             if BACKWARD_OFFSET:
+                # In case of initial backward offset was set to feed start
+                # we need to save it because we will got empty response 
+                # and will not hit usual position save
                 offset_key = get_offset_key(feed_params["descending"])
                 await save_feed_position({
                     SERVER_ID_KEY: get_session_server_id(session),
                     offset_key: response["next_page"]["offset"]
                 })
             # Stop crawling
-            break  
+            break
 
         # Check if we got new data
         if response["data"]:
@@ -334,31 +364,6 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
 
         # Update feed params with new offset for next request
         feed_params.update(offset=response["next_page"]["offset"])
-
-        # Ensure new forward page is cooked enough
-        if FORWARD_CHANGES_COOLDOWN_SECONDS and SLEEP_FORWARD_CHANGES_SECONDS:
-            offest_age = get_offest_age(response["next_page"]["offset"])
-            if offest_age is None:
-                logger.critical(
-                    f"Can't detect offset age for cooldown, "
-                    f"probably offset has invalid format: {response['next_page']['offset']}",
-                    extra={
-                        "MESSAGE_ID": "INVALID_OFFSET",
-                        "FEED_URL": url,
-                    }
-                )
-            elif offest_age < FORWARD_CHANGES_COOLDOWN_SECONDS:
-                # Pause processing to allow the forward page to stabilize
-                # This helps avoid processing rapidly changing records
-                logger.info(
-                    f"New data is less than {FORWARD_CHANGES_COOLDOWN_SECONDS} seconds old, "
-                    f"sleeping for {SLEEP_FORWARD_CHANGES_SECONDS} seconds",
-                    extra={
-                        "MESSAGE_ID": "SLEEP_FORWARD_CHANGES",
-                        "FEED_URL": url,
-                    }
-                )
-                await asyncio.sleep(SLEEP_FORWARD_CHANGES_SECONDS)
 
         # Less than API_LIMIT items received
         # That's mean we got all stuff from feed for now
