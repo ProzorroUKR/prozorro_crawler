@@ -48,8 +48,8 @@ def get_date_modified_key(descending=False):
 def get_offset_age(offset):
     """
     Get age of offset in seconds
-    Offset has format like "1731103209.0000000001"
-    Where first part is unix timestamp, second is increment
+    Offset has format like "1735484400.068.1.87eafe2d01ade9e61f892604ade9cbde"
+    Where first part is unix timestamp
     We need to calculate age of timestamp from now
     Returns:
      - None if offset has invalid format
@@ -60,11 +60,10 @@ def get_offset_age(offset):
     """
     try:    
         offset_parts = offset.split(".")
-        if len(offset_parts) == 2:
-            now = datetime.now(TIMEZONE).timestamp()
-            timestamp = float(offset_parts[0])
-            return now - timestamp
-    except (TypeError, ValueError, AttributeError):
+        now = datetime.now(TIMEZONE).timestamp()
+        timestamp = float(offset_parts[0])
+        return now - timestamp
+    except (IndexError, TypeError, ValueError, AttributeError):
         pass
 
     return None
