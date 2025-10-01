@@ -33,6 +33,8 @@ from prozorro_crawler.utils import (
     SERVER_ID_COOKIE_NAME,
 )
 
+from src.prozorro_crawler.settings import DATE_MODIFIED_FIELD
+
 DEFAULT_FEED_PARAMS = dict(
     descending="",
     offset="",
@@ -358,7 +360,7 @@ async def crawler(should_run, session, url, data_handler, json_loads=json.loads,
             offset_key = get_offset_key(feed_params["descending"])
             await save_feed_position({
                 SERVER_ID_KEY: get_session_server_id(session),
-                date_modified_key: response["data"][-1]["dateModified"],
+                date_modified_key: response["data"][-1][DATE_MODIFIED_FIELD],
                 offset_key: response["next_page"]["offset"]
             })
 
