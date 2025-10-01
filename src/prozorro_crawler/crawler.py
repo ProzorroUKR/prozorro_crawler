@@ -16,6 +16,7 @@ from prozorro_crawler.settings import (
     FORWARD_OFFSET,
     FORWARD_CHANGES_COOLDOWN_SECONDS,
     SLEEP_FORWARD_CHANGES_SECONDS,
+    DATE_MODIFIED_FIELD,
 )
 from prozorro_crawler.storage import (
     save_feed_position,
@@ -32,8 +33,6 @@ from prozorro_crawler.utils import (
     get_date_modified_key,
     SERVER_ID_COOKIE_NAME,
 )
-
-from src.prozorro_crawler.settings import DATE_MODIFIED_FIELD
 
 DEFAULT_FEED_PARAMS = dict(
     descending="",
