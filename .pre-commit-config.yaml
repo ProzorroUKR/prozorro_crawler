@@ -18,14 +18,14 @@ repos:
   hooks:
   - id: ruff
     name: Run Ruff Linter
-    entry: uv run --active ruff check --force-exclude --fix
+    entry: uv run --active ruff check
     language: python
     types_or: [python, pyi, jupyter]
   - id: ruff-format
     name: Run Ruff Formatter
     language: python
     types_or: [python, pyi, jupyter]
-    entry: uv run --active ruff format --force-exclude
+    entry: uv run --active ruff format
   - id: mypy
     name: Validate types with MyPy
     entry: uv run mypy

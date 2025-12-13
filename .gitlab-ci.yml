@@ -1,5 +1,20 @@
 stages:
+  - check
   - test
+
+check:
+  image: python:3.8
+  stage: test
+  tags:
+    - kube-dev
+  before_script:
+    - pip install --upgrade pip
+    - pip install uv
+    - uv sync --frozen --no-cache
+  script:
+    - uv run --active ruff check
+    - uv run --active ruff format --check
+    - uv run mypy src tests
 
 test:
   image: python:3.8
