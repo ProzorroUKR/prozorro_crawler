@@ -6,10 +6,11 @@ test:
   stage: test
   tags:
     - kube-dev
+  before_script:
+    - pip install --upgrade pip
+    - pip install uv
+    - uv sync --frozen --no-cache
   script:
-    - pip install -e .
-    - pip install pytest pytest-asyncio coverage
-    - MONGODB_URL=mongodb://localhost:27017 coverage run --source=src/ -m pytest
-    - coverage report
+    - uv run coverage run --source=src/ -m pytest
+    - uv run coverage report
   coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
-

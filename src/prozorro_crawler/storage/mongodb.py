@@ -1,5 +1,7 @@
+from typing import Any, Optional
+
 from pymongo.errors import PyMongoError
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from prozorro_crawler.settings import (
     logger,
     MONGODB_URL,
@@ -11,60 +13,71 @@ from prozorro_crawler.settings import (
 from .base import (
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
-    SERVER_ID_KEY,
 )
 import asyncio
 
 
-async def close_connection():
-    pass  # TODO: do I need to close MongoDB connection ?
+async def close_connection() -> None:
+    return None  # TODO: do I need to close MongoDB connection ?
 
 
-def get_mongodb_collection(collection_name):
-    client = AsyncIOMotorClient(MONGODB_URL)
-    db = getattr(client, MONGODB_DATABASE)
-    collection = getattr(db, collection_name)
+def get_mongodb_collection(collection_name: str) -> AsyncIOMotorCollection[Any]:
+    client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(MONGODB_URL)
+    db = client.get_database(MONGODB_DATABASE)
+    collection = db.get_collection(collection_name)
     return collection
 
 
-async def save_feed_position(data):
+async def save_feed_position(data: dict[str, str]) -> None:
     collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
     while True:
         try:
-            return await collection.update_one(
+            await collection.update_one(
                 {"_id": MONGODB_STATE_ID},
                 {"$set": data},
-                upsert=True
+                upsert=True,
             )
         except PyMongoError as e:
-            logger.warning(f"Save feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
+            logger.warning(
+                f"Save feed pos {type(e)}: {e}",
+                extra={"MESSAGE_ID": "MONGODB_EXC"},
+            )
             await asyncio.sleep(DB_ERROR_INTERVAL)
+        else:
+            return None
 
 
-async def get_feed_position():
+async def get_feed_position() -> Optional[dict[str, str]]:
     collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
     while True:
         try:
             return await collection.find_one({"_id": MONGODB_STATE_ID})
         except PyMongoError as e:
-            logger.warning(f"Get feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
+            logger.warning(
+                f"Get feed pos {type(e)}: {e}",
+                extra={"MESSAGE_ID": "MONGODB_EXC"},
+            )
             await asyncio.sleep(DB_ERROR_INTERVAL)
 
 
-async def drop_feed_position():
+async def drop_feed_position() -> None:
     collection = get_mongodb_collection(MONGODB_STATE_COLLECTION)
     while True:
         try:
-            return await collection.update_one(
+            await collection.update_one(
                 {"_id": MONGODB_STATE_ID},
                 {
                     "$unset": {
                         BACKWARD_OFFSET_KEY: "",
                         FORWARD_OFFSET_KEY: "",
-                        SERVER_ID_KEY: "",
-                    }
-                }
+                    },
+                },
             )
         except PyMongoError as e:
-            logger.warning(f"Drop feed pos {type(e)}: {e}", extra={"MESSAGE_ID": "MONGODB_EXC"})
+            logger.warning(
+                f"Drop feed pos {type(e)}: {e}",
+                extra={"MESSAGE_ID": "MONGODB_EXC"},
+            )
             await asyncio.sleep(DB_ERROR_INTERVAL)
+        else:
+            return None

@@ -1,3 +1,5 @@
+from typing import Optional, Any
+
 from prozorro_crawler.settings import (
     POSTGRES_HOST,
     POSTGRES_PORT,
@@ -11,7 +13,6 @@ from prozorro_crawler.settings import (
 from .base import (
     BACKWARD_OFFSET_KEY,
     FORWARD_OFFSET_KEY,
-    SERVER_ID_KEY,
 )
 import asyncpg
 import asyncio
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 _connection = None
 
 
-async def reconnect():
+async def reconnect() -> asyncpg.connect.Connection:
     global _connection
     while True:
         try:
@@ -41,19 +42,19 @@ async def reconnect():
             return _connection
 
 
-async def get_connection():
+async def get_connection() -> asyncpg.connect.Connection:
     connection = await reconnect()
     while True:
         try:
             await connection.execute(
-                f'''
+                f"""
                     CREATE TABLE IF NOT EXISTS {POSTGRES_STATE_TABLE}(
                         id varchar PRIMARY KEY,
-                        {SERVER_ID_KEY} varchar,
+                        server_id varchar,
                         {FORWARD_OFFSET_KEY} varchar,
                         {BACKWARD_OFFSET_KEY} varchar
                     )
-                '''
+                """,
             )
         except Exception as e:
             logger.error(f"sql command error: {e.args}")
@@ -63,40 +64,42 @@ async def get_connection():
     return connection
 
 
-async def close_connection():
+async def close_connection() -> None:
     conn = await get_connection()
     await conn.close()
 
 
-async def handle_exception(e):
+async def handle_exception(e: BaseException) -> None:
     logger.warning(f"sql command error: {e.args}")
     if e.args and "connection is closed" in e.args[0]:
         await reconnect()
     await asyncio.sleep(DB_ERROR_INTERVAL)
 
 
-async def get_feed_position():
+async def get_feed_position() -> Optional[dict[str, str]]:
     while True:
         conn = await get_connection()
         try:
             row = await conn.fetchrow(
-                f'SELECT * FROM {POSTGRES_STATE_TABLE} WHERE id = $1',
+                f"SELECT * FROM {POSTGRES_STATE_TABLE} WHERE id = $1",
                 POSTGRES_STATE_ID,
             )
         except Exception as e:
             await handle_exception(e)
+            return None
         else:
-            break
-    return row
+            return dict(row.items())
 
 
-async def save_feed_position(data):
-    offset_key = FORWARD_OFFSET_KEY if FORWARD_OFFSET_KEY in data else BACKWARD_OFFSET_KEY
+async def save_feed_position(data: dict[str, str]) -> None:
+    offset_key = (
+        FORWARD_OFFSET_KEY if FORWARD_OFFSET_KEY in data else BACKWARD_OFFSET_KEY
+    )
     result = await execute_command(
         f"UPDATE {POSTGRES_STATE_TABLE} "
-        f"SET {SERVER_ID_KEY} = $1, {offset_key} = $2"
+        f"SET server_id = $1, {offset_key} = $2"
         "WHERE id = $3",
-        data[SERVER_ID_KEY],
+        "",
         str(data[offset_key]),
         POSTGRES_STATE_ID,
     )
@@ -104,7 +107,7 @@ async def save_feed_position(data):
         result = await execute_command(
             f"INSERT INTO {POSTGRES_STATE_TABLE} VALUES($1, $2, $3, $4)",
             POSTGRES_STATE_ID,
-            data.get(SERVER_ID_KEY),
+            "",
             str(data.get(FORWARD_OFFSET_KEY, "")),
             str(data.get(BACKWARD_OFFSET_KEY, "")),
         )
@@ -112,11 +115,14 @@ async def save_feed_position(data):
             logger.error(f"Unexpected insert result: {result}")
 
 
-async def drop_feed_position():
-    await execute_command(f"DELETE FROM {POSTGRES_STATE_TABLE} WHERE id = $1", POSTGRES_STATE_ID)
+async def drop_feed_position() -> None:
+    await execute_command(
+        f"DELETE FROM {POSTGRES_STATE_TABLE} WHERE id = $1",
+        POSTGRES_STATE_ID,
+    )
 
 
-async def execute_command(comm, *args):
+async def execute_command(comm: str, *args: Any) -> str:
     while True:
         conn = await get_connection()
         try:
@@ -124,4 +130,4 @@ async def execute_command(comm, *args):
         except Exception as e:
             await handle_exception(e)
         else:
-            return result
+            return str(result)

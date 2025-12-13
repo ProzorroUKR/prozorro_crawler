@@ -1,0 +1,37 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v2.4.0
+  hooks:
+  - id: check-ast
+  - id: trailing-whitespace
+  - id: check-toml
+  - id: end-of-file-fixer
+
+- repo: https://github.com/asottile/add-trailing-comma
+  rev: v2.1.0
+  hooks:
+  - id: add-trailing-comma
+
+- repo: local
+  hooks:
+  - id: ruff
+    name: Run Ruff Linter
+    entry: uv run --active ruff check --force-exclude --fix
+    language: python
+    types_or: [python, pyi, jupyter]
+  - id: ruff-format
+    name: Run Ruff Formatter
+    language: python
+    types_or: [python, pyi, jupyter]
+    entry: uv run --active ruff format --force-exclude
+  - id: mypy
+    name: Validate types with MyPy
+    entry: uv run mypy
+    language: system
+    types: [ python ]
+    pass_filenames: false
+    args:
+      - src
+      - tests

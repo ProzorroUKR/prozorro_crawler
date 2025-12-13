@@ -1,6 +1,8 @@
 from datetime import datetime
+from typing import Optional
+
+
 from prozorro_crawler.settings import (
-    PUBLIC_API_HOST,
     CRAWLER_USER_AGENT,
     BASE_URL,
     API_TOKEN,
@@ -13,14 +15,12 @@ from prozorro_crawler.storage.base import (
     LATEST_DATE_MODIFIED_KEY,
 )
 
-SERVER_ID_COOKIE_NAME = "SERVER_ID"
 
-
-def get_resource_url(resource):
+def get_resource_url(resource: str) -> str:
     return f"{BASE_URL}/{resource}"
 
 
-def get_default_headers(additional_headers):
+def get_default_headers(additional_headers: Optional[dict[str, str]]) -> dict[str, str]:
     headers = {}
     if API_TOKEN:
         headers["Authorization"] = f"Bearer {API_TOKEN}"
@@ -30,22 +30,15 @@ def get_default_headers(additional_headers):
     return headers
 
 
-def get_session_server_id(session, request_url=PUBLIC_API_HOST):
-    filtered = session.cookie_jar.filter_cookies(request_url)
-    server_id_cookie = filtered.get(SERVER_ID_COOKIE_NAME)
-    if server_id_cookie:
-        return server_id_cookie.value
-
-
-def get_offset_key(descending=False):
+def get_offset_key(descending: bool = False) -> str:
     return BACKWARD_OFFSET_KEY if descending else FORWARD_OFFSET_KEY
 
 
-def get_date_modified_key(descending=False):
+def get_date_modified_key(descending: bool = False) -> str:
     return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY
 
 
-def get_offset_age(offset):
+def get_offset_age(offset: str) -> Optional[float]:
     """
     Get age of offset in seconds
     Offset has format like "1735484400.068.1.87eafe2d01ade9e61f892604ade9cbde"
@@ -58,7 +51,7 @@ def get_offset_age(offset):
     :param offset: str
     :return: int | None
     """
-    try:    
+    try:
         offset_parts = offset.split(".")
         now = datetime.now(TIMEZONE).timestamp()
         timestamp = float(offset_parts[0])

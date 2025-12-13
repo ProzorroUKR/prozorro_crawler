@@ -1,4 +1,6 @@
 import os
+from typing import Union, Optional, Any, Callable
+
 import pytz
 
 from pythonjsonlogger import jsonlogger
@@ -13,11 +15,15 @@ from prozorro_crawler.callbacks import (
 )
 
 
-def getenv(key, default=None, callback=None):
+def getenv(
+    key: str,
+    default: Union[str, int],
+    callback: Optional[Callable[[str, Any, Any], Any]] = None,
+) -> str:
     value = os.environ.get(key, default)
     if callback:
         callback(key, value, default)
-    return value
+    return str(value)
 
 
 # logging
@@ -26,9 +32,9 @@ LOG_LEVEL = int(getenv("LOG_LEVEL", logging.INFO))
 logger = logging.getLogger(LOGGER_NAME)
 logger.setLevel(LOG_LEVEL)
 logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter(
-    '%(levelname)s %(asctime)s %(module)s %(process)d '
-    '%(message)s %(pathname)s $(lineno)d $(funcName)s'
+formatter = jsonlogger.JsonFormatter(  # type: ignore[no-untyped-call]
+    "%(levelname)s %(asctime)s %(module)s %(process)d "
+    "%(message)s %(pathname)s $(lineno)d $(funcName)s",
 )
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
@@ -43,21 +49,33 @@ CONNECTION_ERROR_INTERVAL = int(getenv("CONNECTION_ERROR_INTERVAL", 5))
 NO_ITEMS_INTERVAL = int(getenv("NO_ITEMS_INTERVAL", 15))
 GET_ERROR_RETRIES = int(getenv("GET_ERROR_RETRIES", 5))
 
-PUBLIC_API_HOST = getenv("PUBLIC_API_HOST", "https://public-api-sandbox.prozorro.gov.ua", assert_url)
+PUBLIC_API_HOST = getenv(
+    "PUBLIC_API_HOST",
+    "https://public-api-sandbox.prozorro.gov.ua",
+    assert_url,
+)
 API_VERSION = getenv("API_VERSION", "2.5")
 API_LIMIT = int(getenv("API_LIMIT", 100))
 API_MODE = getenv("API_MODE", "_all_")
 API_OPT_FIELDS = getenv("API_OPT_FIELDS", "").split(",")
 API_RESOURCE = getenv("API_RESOURCE", "tenders")
-API_TOKEN = getenv("API_TOKEN")
+API_TOKEN = getenv("API_TOKEN", "")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 
-CRAWLER_USER_AGENT = getenv("CRAWLER_USER_AGENT", "ProZorro Crawler 2.0", warn_crawler_user_agent)
+CRAWLER_USER_AGENT = getenv(
+    "CRAWLER_USER_AGENT",
+    "ProZorro Crawler 2.0",
+    warn_crawler_user_agent,
+)
 
 MONGODB_URL = getenv("MONGODB_URL", "")
 MONGODB_DATABASE = getenv("MONGODB_DATABASE", "prozorro-crawler")
 MONGODB_STATE_COLLECTION = getenv("MONGODB_STATE_COLLECTION", "prozorro-crawler-state")
-MONGODB_STATE_ID = getenv("MONGODB_STATE_ID", "FEED_CRAWLER_STATE", warn_mongodb_conflicts)
+MONGODB_STATE_ID = getenv(
+    "MONGODB_STATE_ID",
+    "FEED_CRAWLER_STATE",
+    warn_mongodb_conflicts,
+)
 
 POSTGRES_HOST = getenv("POSTGRES_HOST", "")
 POSTGRES_PORT = int(getenv("POSTGRES_PORT", 5432))
@@ -65,7 +83,11 @@ POSTGRES_DB = getenv("POSTGRES_DB", "prozorro-crawler")
 POSTGRES_USER = getenv("POSTGRES_USER", "agent")
 POSTGRES_PASSWORD = getenv("POSTGRES_PASSWORD", "kalina")
 POSTGRES_STATE_TABLE = getenv("POSTGRES_STATE_TABLE", "crawler_state")
-POSTGRES_STATE_ID = getenv("POSTGRES_STATE_ID", "crawler_state", warn_postgres_conflicts)
+POSTGRES_STATE_ID = getenv(
+    "POSTGRES_STATE_ID",
+    "crawler_state",
+    warn_postgres_conflicts,
+)
 
 DB_ERROR_INTERVAL = int(getenv("DB_ERROR_INTERVAL", 5))
 
@@ -82,5 +104,7 @@ BACKWARD_OFFSET = getenv("BACKWARD_OFFSET", "")
 FORWARD_OFFSET = getenv("FORWARD_OFFSET", "")
 TIMEZONE = pytz.timezone(os.getenv("TIMEZONE", "Europe/Kiev"))
 FORWARD_CHANGES_COOLDOWN_SECONDS = int(getenv("FORWARD_CHANGES_COOLDOWN_SECONDS", 0))
-SLEEP_FORWARD_CHANGES_SECONDS = int(getenv("SLEEP_FORWARD_CHANGES_SECONDS", FORWARD_CHANGES_COOLDOWN_SECONDS))
+SLEEP_FORWARD_CHANGES_SECONDS = int(
+    getenv("SLEEP_FORWARD_CHANGES_SECONDS", FORWARD_CHANGES_COOLDOWN_SECONDS),
+)
 DATE_MODIFIED_FIELD = getenv("DATE_MODIFIED_FIELD", "dateModified")

@@ -1,7 +1,9 @@
 from prozorro_crawler.resource import process_resource, get_response_data
 from unittest.mock import MagicMock, patch, call
 from prozorro_crawler.settings import (
-    CONNECTION_ERROR_INTERVAL, TOO_MANY_REQUESTS_INTERVAL, GET_ERROR_RETRIES,
+    CONNECTION_ERROR_INTERVAL,
+    TOO_MANY_REQUESTS_INTERVAL,
+    GET_ERROR_RETRIES,
 )
 from json.decoder import JSONDecodeError
 from .base import AsyncMock
@@ -11,7 +13,7 @@ import pytest
 
 @pytest.mark.asyncio
 @patch("prozorro_crawler.resource.get_response_data")
-async def test_process_resource(get_response_data_mock):
+async def test_process_resource(get_response_data_mock: AsyncMock) -> None:
     process_function = AsyncMock()
     session = MagicMock()
     data = {"something": "hello"}
@@ -25,20 +27,17 @@ async def test_process_resource(get_response_data_mock):
 
 @pytest.mark.asyncio
 @patch("prozorro_crawler.main.asyncio.sleep")
-async def test_get_response_data(sleep_mock):
+async def test_get_response_data(sleep_mock: MagicMock) -> None:
     session = MagicMock()
     data = {"data": "hello"}
-    response = MagicMock(
-        status=200,
-        json=AsyncMock(
-            return_value=data
-        )
+    response = MagicMock(status=200, json=AsyncMock(return_value=data))
+    session.get = AsyncMock(
+        side_effect=[
+            aiohttp.ClientConnectionError("Sheep happens"),
+            MagicMock(status=429, text=AsyncMock(return_value="Too many")),
+            response,
+        ],
     )
-    session.get = AsyncMock(side_effect=[
-        aiohttp.ClientConnectionError("Sheep happens"),
-        MagicMock(status=429, text=AsyncMock(return_value="Too many")),
-        response,
-    ])
 
     result = await get_response_data(session, "/abc")
 
@@ -47,23 +46,21 @@ async def test_get_response_data(sleep_mock):
         call(CONNECTION_ERROR_INTERVAL),
         call(TOO_MANY_REQUESTS_INTERVAL),
     ]
-    assert session.get.mock_calls == [
-        call("/abc")
-    ] * 3
+    assert session.get.mock_calls == [call("/abc")] * 3
 
 
 @pytest.mark.asyncio
 @patch("prozorro_crawler.main.asyncio.sleep")
-async def test_get_response_data_error(sleep_mock):
+async def test_get_response_data_error(sleep_mock: MagicMock) -> None:
     process_function = AsyncMock()
     session = MagicMock()
-    session.get = AsyncMock(return_value=MagicMock(status=404, text=AsyncMock(return_value="Not found")))
+    session.get = AsyncMock(
+        return_value=MagicMock(status=404, text=AsyncMock(return_value="Not found")),
+    )
 
     await get_response_data(session, "/abc")
 
-    assert session.get.mock_calls == [
-        call("/abc")
-    ] * GET_ERROR_RETRIES
+    assert session.get.mock_calls == [call("/abc")] * GET_ERROR_RETRIES
 
     process_function.assert_not_called()
     assert sleep_mock.mock_calls == [
@@ -73,20 +70,26 @@ async def test_get_response_data_error(sleep_mock):
 
 @pytest.mark.asyncio
 @patch("prozorro_crawler.main.asyncio.sleep")
-async def test_get_response_data_payload_error(sleep_mock):
+async def test_get_response_data_payload_error(sleep_mock: MagicMock) -> None:
     process_function = AsyncMock()
     session = MagicMock()
-    session.get = AsyncMock(side_effect=[
-        MagicMock(
-            status=200,
-            json=AsyncMock(side_effect=aiohttp.ClientPayloadError("Response payload is not completed"))
-        ),
-        MagicMock(
-            status=200,
-            json=AsyncMock(side_effect=JSONDecodeError("Failed decode", "", 0))
-        ),
-        StopAsyncIteration
-    ])
+    session.get = AsyncMock(
+        side_effect=[
+            MagicMock(
+                status=200,
+                json=AsyncMock(
+                    side_effect=aiohttp.ClientPayloadError(
+                        "Response payload is not completed",
+                    ),
+                ),
+            ),
+            MagicMock(
+                status=200,
+                json=AsyncMock(side_effect=JSONDecodeError("Failed decode", "", 0)),
+            ),
+            StopAsyncIteration,
+        ],
+    )
 
     try:
         await get_response_data(session, "/abc")

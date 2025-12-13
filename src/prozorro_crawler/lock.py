@@ -1,3 +1,5 @@
+from typing import Awaitable, Callable, Any
+from motor.motor_asyncio import AsyncIOMotorCollection
 from prozorro_crawler.storage.mongodb import get_mongodb_collection
 from prozorro_crawler.settings import (
     LOCK_ENABLED,
@@ -13,27 +15,27 @@ from pymongo.errors import PyMongoError, DuplicateKeyError
 from datetime import datetime, timedelta
 from uuid import uuid4
 from asyncio import sleep, get_event_loop
-import os, signal
+import os
+import signal
 
 
-def get_lock_collection():
+def get_lock_collection() -> AsyncIOMotorCollection[Any]:
     return get_mongodb_collection(LOCK_COLLECTION_NAME)
 
 
-async def init_lock_index():
+async def init_lock_index() -> None:
     try:
         await get_lock_collection().create_index("expireAt", expireAfterSeconds=0)
     except PyMongoError as e:
-        logger.exception(e,  extra={"MESSAGE_ID": "MONGODB_INDEX_CREATION_ERROR"})
+        logger.exception(e, extra={"MESSAGE_ID": "MONGODB_INDEX_CREATION_ERROR"})
 
 
 class Lock:
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = uuid4().hex
         logger.info(f"Lock {LOCK_PROCESS_NAME} {self.id} initialized")
 
-    async def acquire(self, should_run):
+    async def acquire(self, should_run: Callable[[], bool]) -> bool:
         """
         Setting lock for LOCK_EXPIRE_TIME seconds
         Use "update" to continue locking for another LOCK_EXPIRE_TIME period.
@@ -49,7 +51,8 @@ class Lock:
                     {
                         "_id": LOCK_PROCESS_NAME,
                         "lockId": self.id,
-                        "expireAt": datetime.utcnow() + timedelta(seconds=LOCK_EXPIRE_TIME),
+                        "expireAt": datetime.utcnow()
+                        + timedelta(seconds=LOCK_EXPIRE_TIME),
                     },
                 )
             except PyMongoError as e:
@@ -60,7 +63,7 @@ class Lock:
                 return True
         return False
 
-    async def update(self, should_run):
+    async def update(self, should_run: Callable[[], bool]) -> None:
         await sleep(LOCK_UPDATE_TIME)
 
         while should_run():
@@ -70,14 +73,19 @@ class Lock:
                         "_id": LOCK_PROCESS_NAME,  # inserting may fail because of _id DuplicateError
                         "lockId": self.id,
                     },
-                    {"$set": {"expireAt": datetime.utcnow() + timedelta(seconds=LOCK_EXPIRE_TIME)}},
-                    upsert=True
+                    {
+                        "$set": {
+                            "expireAt": datetime.utcnow()
+                            + timedelta(seconds=LOCK_EXPIRE_TIME),
+                        },
+                    },
+                    upsert=True,
                 )
             except PyMongoError as e:
                 if isinstance(e, DuplicateKeyError):
                     logger.critical(
                         "Another process acquired the lock, "
-                        "the time between 'update' maybe takes more than LOCK_EXPIRE_TIME"
+                        "the time between 'update' maybe takes more than LOCK_EXPIRE_TIME",
                     )
                     return os.kill(os.getpid(), signal.SIGTERM)
                 logger.warning(e)
@@ -87,11 +95,12 @@ class Lock:
                     f"Updated lock {LOCK_PROCESS_NAME} #{self.id}: "
                     f"acknowledged={result.acknowledged} "
                     f"modified_count={result.modified_count} "
-                    f"upserted_id={result.upserted_id}"
+                    f"upserted_id={result.upserted_id}",
                 )
                 await sleep(LOCK_UPDATE_TIME)
+        return None
 
-    async def release(self):
+    async def release(self) -> None:
         try:
             result = await get_lock_collection().delete_one(
                 {
@@ -104,12 +113,16 @@ class Lock:
         else:
             logger.info(
                 f"Deleted lock {LOCK_PROCESS_NAME} #{self.id}: "
-                f"deleted_count={result.deleted_count}"
+                f"deleted_count={result.deleted_count}",
             )
 
     # task wrapper
     @classmethod
-    async def run_locked(cls, get_app, should_run):
+    async def run_locked(
+        cls,
+        get_app: Callable[[], Awaitable[None]],
+        should_run: Callable[[], bool],
+    ) -> None:
         if LOCK_ENABLED:
             await init_lock_index()
             loop = get_event_loop()
