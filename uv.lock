@@ -640,7 +640,7 @@ wheels = [
 
 [[package]]
 name = "prozorro-crawler"
-version = "2.1.5"
+version = "2.1.8"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

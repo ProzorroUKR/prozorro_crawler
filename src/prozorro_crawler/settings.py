@@ -1,6 +1,6 @@
 import os
 from typing import Union, Optional, Any, Callable
-
+from configparser import RawConfigParser
 import pytz
 
 from pythonjsonlogger import jsonlogger
@@ -17,13 +17,23 @@ from prozorro_crawler.callbacks import (
 
 def getenv(
     key: str,
-    default: Union[str, int],
+    default: Union[str, int, bool],
     callback: Optional[Callable[[str, Any, Any], Any]] = None,
 ) -> str:
     value = os.environ.get(key, default)
     if callback:
         callback(key, value, default)
     return str(value)
+
+
+def get_bool_env(
+    key: str,
+    default: Union[str, int, bool],
+    callback: Optional[Callable[[str, Any, Any], Any]] = None,
+) -> bool:
+    return RawConfigParser.BOOLEAN_STATES[
+        getenv(key, default=default, callback=callback).lower()
+    ]
 
 
 # logging
@@ -92,7 +102,7 @@ POSTGRES_STATE_ID = getenv(
 DB_ERROR_INTERVAL = int(getenv("DB_ERROR_INTERVAL", 5))
 
 # lock
-LOCK_ENABLED = bool(getenv("LOCK_ENABLED", False))
+LOCK_ENABLED = get_bool_env("LOCK_ENABLED", False)
 LOCK_COLLECTION_NAME = getenv("LOCK_COLLECTION_NAME", "process_lock")
 LOCK_EXPIRE_TIME = int(getenv("LOCK_EXPIRE_TIME", 60))
 LOCK_UPDATE_TIME = int(getenv("LOCK_UPDATE_TIME", 30))
