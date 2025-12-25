@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 _connection = None
 
 
-async def reconnect() -> asyncpg.connect.Connection:
+async def reconnect() -> asyncpg.Connection:
     global _connection
     while True:
         try:
@@ -42,7 +42,7 @@ async def reconnect() -> asyncpg.connect.Connection:
             return _connection
 
 
-async def get_connection() -> asyncpg.connect.Connection:
+async def get_connection() -> asyncpg.Connection:
     connection = await reconnect()
     while True:
         try:
@@ -88,6 +88,8 @@ async def get_feed_position() -> Optional[dict[str, str]]:
             await handle_exception(e)
             return None
         else:
+            if row is None:
+                return None
             return dict(row.items())
 
 
@@ -97,8 +99,7 @@ async def save_feed_position(data: dict[str, str]) -> None:
     )
     result = await execute_command(
         f"UPDATE {POSTGRES_STATE_TABLE} "
-        f"SET server_id = $1, {offset_key} = $2"
-        "WHERE id = $3",
+        f"SET server_id = $1, {offset_key} = $2 WHERE id = $3",
         "",
         str(data[offset_key]),
         POSTGRES_STATE_ID,
