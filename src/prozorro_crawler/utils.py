@@ -38,6 +38,16 @@ def get_date_modified_key(descending: bool = False) -> str:
     return EARLIEST_DATE_MODIFIED_KEY if descending else LATEST_DATE_MODIFIED_KEY
 
 
+def get_offset_timestamp(offset: str) -> Optional[float]:
+    """
+    Extract unix timestamp from feed offset.
+    """
+    try:
+        return float(offset.split(".")[0])
+    except (IndexError, TypeError, ValueError, AttributeError):
+        return None
+
+
 def get_offset_age(offset: str) -> Optional[float]:
     """
     Get age of offset in seconds
@@ -51,10 +61,8 @@ def get_offset_age(offset: str) -> Optional[float]:
     :param offset: str
     :return: int | None
     """
-    try:
-        offset_parts = offset.split(".")
-        now = datetime.now(TIMEZONE).timestamp()
-        timestamp = float(offset_parts[0])
-        return now - timestamp
-    except (IndexError, TypeError, ValueError, AttributeError):
+    timestamp = get_offset_timestamp(offset)
+    if timestamp is None:
         return None
+    now = datetime.now(TIMEZONE).timestamp()
+    return now - timestamp
