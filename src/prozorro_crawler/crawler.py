@@ -46,6 +46,9 @@ DEFAULT_FEED_PARAMS: dict[str, Union[str, int]] = dict(
     mode=API_MODE,
 )
 
+CRAWLERS_STOPED_LOG_INTERVAL = 60
+NO_CRAWLERS_TO_RUN_LOG_INTERVAL = 60
+
 
 async def init_crawler(
     should_run: Callable[[], bool],
@@ -171,24 +174,26 @@ async def init_crawler(
 
             # Stop crawlers if stop offsets are reached
             if STOP_BACKWARD_OFFSET or STOP_FORWARD_OFFSET:
-                logger.info(
-                    "Crawlers stopped by stop offsets",
+                while should_run():
+                    logger.info(
+                        "Crawlers stopped by stop offsets",
+                        extra={
+                            "MESSAGE_ID": "CRAWLERS_STOPPED_BY_STOP_OFFSETS",
+                            "FEED_URL": url,
+                        },
+                    )
+                    await asyncio.sleep(CRAWLERS_STOPED_LOG_INTERVAL)
+        else:
+            # No crawlers to run. Should not happen.
+            while should_run():
+                logger.critical(
+                    "No crawlers to run.",
                     extra={
-                        "MESSAGE_ID": "CRAWLERS_STOPPED_BY_STOP_OFFSETS",
+                        "MESSAGE_ID": "NO_CRAWLERS_TO_RUN",
                         "FEED_URL": url,
                     },
                 )
-                break
-        else:
-            # No crawlers to run. Should not happen.
-            logger.critical(
-                "No crawlers to run, stopping.",
-                extra={
-                    "MESSAGE_ID": "NO_CRAWLERS_TO_RUN",
-                    "FEED_URL": url,
-                },
-            )
-            break
+                await asyncio.sleep(NO_CRAWLERS_TO_RUN_LOG_INTERVAL)
 
 
 async def init_feed(
