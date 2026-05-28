@@ -109,12 +109,24 @@ LOCK_UPDATE_TIME = int(getenv("LOCK_UPDATE_TIME", 30))
 LOCK_ACQUIRE_INTERVAL = int(getenv("LOCK_ACQUIRE_INTERVAL", 10))
 LOCK_PROCESS_NAME = getenv("LOCK_PROCESS_NAME", "crawler_lock", warn_db_conflicts)
 
-# offsets
+# initial offsets (used on first initialization of crawler if no saved position in db)
 BACKWARD_OFFSET = getenv("BACKWARD_OFFSET", "")
 FORWARD_OFFSET = getenv("FORWARD_OFFSET", "")
+
+# explicitly set initial offsets (bypasses offsets from db on initialization)
+# Warning: do not use on regular crawling, only for special short run cases
+START_BACKWARD_OFFSET = getenv("START_BACKWARD_OFFSET", "")
+START_FORWARD_OFFSET = getenv("START_FORWARD_OFFSET", "")
+
+# explicitly set stop offsets
+# Warning: do not use on regular crawling, only for special short run cases
+STOP_BACKWARD_OFFSET = getenv("STOP_BACKWARD_OFFSET", "")
+STOP_FORWARD_OFFSET = getenv("STOP_FORWARD_OFFSET", "")
+
 TIMEZONE = pytz.timezone(os.getenv("TIMEZONE", "Europe/Kiev"))
 FORWARD_CHANGES_COOLDOWN_SECONDS = int(getenv("FORWARD_CHANGES_COOLDOWN_SECONDS", 0))
 SLEEP_FORWARD_CHANGES_SECONDS = int(
     getenv("SLEEP_FORWARD_CHANGES_SECONDS", FORWARD_CHANGES_COOLDOWN_SECONDS),
 )
+
 DATE_MODIFIED_FIELD = getenv("DATE_MODIFIED_FIELD", "dateModified")

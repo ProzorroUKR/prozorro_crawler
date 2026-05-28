@@ -16,6 +16,10 @@ from prozorro_crawler.settings import (
     API_MODE,
     BACKWARD_OFFSET,
     FORWARD_OFFSET,
+    START_BACKWARD_OFFSET,
+    START_FORWARD_OFFSET,
+    STOP_BACKWARD_OFFSET,
+    STOP_FORWARD_OFFSET,
     FORWARD_CHANGES_COOLDOWN_SECONDS,
     SLEEP_FORWARD_CHANGES_SECONDS,
     DATE_MODIFIED_FIELD,
@@ -29,6 +33,7 @@ from prozorro_crawler.storage import (
 )
 from prozorro_crawler.utils import (
     get_offset_age,
+    get_offset_timestamp,
     get_offset_key,
     get_date_modified_key,
 )
@@ -75,28 +80,46 @@ async def init_crawler(
         # Get current feed position from storage
         feed_position = await get_feed_position()
 
-        # If we have saved position, use it
-        if (
-            feed_position
-            and BACKWARD_OFFSET_KEY in feed_position
-            and FORWARD_OFFSET_KEY in feed_position
-        ):
+        # Explicit start offsets have priority and bypass persisted state.
+        if START_BACKWARD_OFFSET or START_FORWARD_OFFSET:
+            backward_offset = START_BACKWARD_OFFSET
+            forward_offset = START_FORWARD_OFFSET
             logger.info(
-                f"Start from saved position: {feed_position}",
+                f"Start from explicitly provided start offsets backward_offset={backward_offset} forward_offset={forward_offset}",
+                extra={
+                    "MESSAGE_ID": "LOAD_CRAWLER_START_OFFSETS",
+                    "FEED_URL": url,
+                },
+            )
+
+        # If we have saved position, use it
+        elif feed_position and (
+            BACKWARD_OFFSET_KEY in feed_position or FORWARD_OFFSET_KEY in feed_position
+        ):
+            forward_offset = str(feed_position.get(FORWARD_OFFSET_KEY) or "")
+            backward_offset = str(feed_position.get(BACKWARD_OFFSET_KEY) or "")
+            logger.info(
+                f"Start from saved position: backward_offset={backward_offset} forward_offset={forward_offset}",
                 extra={
                     "MESSAGE_ID": "LOAD_CRAWLER_POSITION",
                     "FEED_URL": url,
                 },
             )
-            forward_offset = feed_position[FORWARD_OFFSET_KEY]
-            backward_offset = feed_position[BACKWARD_OFFSET_KEY]
 
         # If we don't have saved position, use default offsets if they are set
-        elif BACKWARD_OFFSET and FORWARD_OFFSET:
+        elif BACKWARD_OFFSET or FORWARD_OFFSET:
             # Only used in first initialization if no saved position in db
             backward_offset = BACKWARD_OFFSET
             forward_offset = FORWARD_OFFSET
+            logger.info(
+                f"Start from provided initial offsets backward_offset={backward_offset} forward_offset={forward_offset}",
+                extra={
+                    "MESSAGE_ID": "LOAD_CRAWLER_INITIAL_OFFSETS",
+                    "FEED_URL": url,
+                },
+            )
 
+        # Default flow
         # If we don't have default offsets, initialize feed from scratch
         else:
             backward_offset, forward_offset = await init_feed(
@@ -108,32 +131,43 @@ async def init_crawler(
                 **kwargs,
             )
 
+        crawlers = []
+
+        # Forward crawler
+        # It should run forever waiting for new data
+        if forward_offset:
+            crawlers.append(
+                crawler(
+                    should_run,
+                    session,
+                    url,
+                    data_handler,
+                    json_loads=json_loads,
+                    offset=forward_offset,
+                    **kwargs,
+                ),
+            )
+
+        # Backward crawler
+        # It should run until all ancient data is processed
+        if backward_offset:
+            crawlers.append(
+                crawler(
+                    should_run,
+                    session,
+                    url,
+                    data_handler,
+                    json_loads=json_loads,
+                    offset=backward_offset,
+                    descending="1",
+                    **kwargs,
+                ),
+            )
+
         # Run 2 crawlers in parallel
-        await asyncio.gather(
-            # Forward crawler
-            # It should run forever waiting for new data
-            crawler(
-                should_run,
-                session,
-                url,
-                data_handler,
-                json_loads=json_loads,
-                offset=forward_offset,
-                **kwargs,
-            ),
-            # Backward crawler
-            # It should run until all ancient data is processed
-            crawler(
-                should_run,
-                session,
-                url,
-                data_handler,
-                json_loads=json_loads,
-                offset=backward_offset,
-                descending="1",
-                **kwargs,
-            ),
-        )
+        # If we have at least one crawler, run it in parallel
+        if crawlers:
+            await asyncio.gather(*crawlers)
 
 
 async def init_feed(
@@ -234,6 +268,40 @@ async def crawler(
     )
 
     while should_run():
+        # Check if we reached configured stop offset
+        stop_offset = (
+            STOP_BACKWARD_OFFSET
+            if bool(feed_params.get("descending"))
+            else STOP_FORWARD_OFFSET
+        )
+        if stop_offset:
+            current_offset_ts = get_offset_timestamp(str(feed_params.get("offset", "")))
+            stop_offset_ts = get_offset_timestamp(stop_offset)
+            if current_offset_ts is None or stop_offset_ts is None:
+                logger.warning(
+                    f"Invalid stop/current offset format: stop={stop_offset}, current={feed_params.get('offset')}",
+                    extra={
+                        "MESSAGE_ID": "INVALID_STOP_OFFSET",
+                        "FEED_URL": url,
+                    },
+                )
+            else:
+                reached_stop_offset = (
+                    current_offset_ts <= stop_offset_ts
+                    if bool(feed_params.get("descending"))
+                    else current_offset_ts >= stop_offset_ts
+                )
+                if reached_stop_offset:
+                    logger.info(
+                        "Reached configured stop offset, stopping crawler",
+                        extra={
+                            "MESSAGE_ID": "CRAWLER_STOP_OFFSET_REACHED",
+                            "FEED_URL": url,
+                            "FEED_PARAMS": feed_params,
+                        },
+                    )
+                    break
+
         # Ensure new forward page is cooked enough
         if FORWARD_CHANGES_COOLDOWN_SECONDS and SLEEP_FORWARD_CHANGES_SECONDS:
             offset_age = get_offset_age(str(feed_params["offset"]))
@@ -364,7 +432,7 @@ async def crawler(
                     "FEED_URL": url,
                 },
             )
-            if BACKWARD_OFFSET:
+            if BACKWARD_OFFSET or START_BACKWARD_OFFSET:
                 # In case of initial backward offset was set to feed start
                 # we need to save it because we will got empty response
                 # and will not hit usual position save
