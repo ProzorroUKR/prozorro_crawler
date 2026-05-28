@@ -169,6 +169,27 @@ async def init_crawler(
         if crawlers:
             await asyncio.gather(*crawlers)
 
+            # Stop crawlers if stop offsets are reached
+            if STOP_BACKWARD_OFFSET or STOP_FORWARD_OFFSET:
+                logger.info(
+                    "Crawlers stopped by stop offsets",
+                    extra={
+                        "MESSAGE_ID": "CRAWLERS_STOPPED_BY_STOP_OFFSETS",
+                        "FEED_URL": url,
+                    },
+                )
+                break
+        else:
+            # No crawlers to run. Should not happen.
+            logger.critical(
+                "No crawlers to run, stopping.",
+                extra={
+                    "MESSAGE_ID": "NO_CRAWLERS_TO_RUN",
+                    "FEED_URL": url,
+                },
+            )
+            break
+
 
 async def init_feed(
     should_run: Callable[[], bool],
