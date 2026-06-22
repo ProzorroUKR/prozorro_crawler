@@ -1,7 +1,12 @@
+from functools import lru_cache
 from typing import Any, Optional
 
 from pymongo.errors import PyMongoError
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorCollection,
+    AsyncIOMotorDatabase,
+)
 from prozorro_crawler.settings import (
     logger,
     MONGODB_URL,
@@ -21,11 +26,16 @@ async def close_connection() -> None:
     return None  # TODO: do I need to close MongoDB connection ?
 
 
-def get_mongodb_collection(collection_name: str) -> AsyncIOMotorCollection[Any]:
+@lru_cache(maxsize=1)
+def _get_mongodb_database() -> AsyncIOMotorDatabase[Any]:
     client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(MONGODB_URL)
-    db = client.get_database(MONGODB_DATABASE)
-    collection = db.get_collection(collection_name)
-    return collection
+    return client.get_database(MONGODB_DATABASE)
+
+
+def get_mongodb_collection(collection_name: str) -> AsyncIOMotorCollection[Any]:
+    db = _get_mongodb_database()
+
+    return db.get_collection(collection_name)
 
 
 async def save_feed_position(data: dict[str, str]) -> None:
