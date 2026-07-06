@@ -82,6 +82,7 @@ async def init_crawler(
     while should_run():
         # Get current feed position from storage
         feed_position = await get_feed_position()
+        initialized_from_feed = False
 
         # Explicit start offsets have priority and bypass persisted state.
         if START_BACKWARD_OFFSET or START_FORWARD_OFFSET:
@@ -125,6 +126,7 @@ async def init_crawler(
         # Default flow
         # If we don't have default offsets, initialize feed from scratch
         else:
+            initialized_from_feed = True
             backward_offset, forward_offset = await init_feed(
                 should_run,
                 session,
@@ -138,7 +140,7 @@ async def init_crawler(
 
         # Forward crawler
         # It should run forever waiting for new data
-        if forward_offset:
+        if initialized_from_feed or forward_offset:
             crawlers.append(
                 crawler(
                     should_run,
@@ -153,7 +155,7 @@ async def init_crawler(
 
         # Backward crawler
         # It should run until all ancient data is processed
-        if backward_offset:
+        if initialized_from_feed or backward_offset:
             crawlers.append(
                 crawler(
                     should_run,
