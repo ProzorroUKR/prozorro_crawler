@@ -130,6 +130,64 @@ async def test_init_crawler_init_feed(
     ]
 
 
+@patch(
+    "prozorro_crawler.crawler.get_feed_position",
+    AsyncMock(side_effect=[None, StopAsyncIteration]),
+)
+@patch("prozorro_crawler.crawler.init_feed")
+@patch("prozorro_crawler.crawler.crawler")
+async def test_init_crawler_empty_init_feed_offsets(
+    crawler_mock: MagicMock,
+    init_feed_mock: MagicMock,
+) -> None:
+    session = MagicMock()
+    init_feed_mock.return_value = ("", "")
+    data_handler = AsyncMock()
+    opt_fields = "test1,test2"
+
+    try:
+        await init_crawler(
+            should_run,
+            session,
+            "/abc",
+            data_handler,
+            opt_fields=opt_fields,
+            json_loads=json.loads,
+        )
+    except StopAsyncIteration:
+        pass
+
+    init_feed_mock.assert_called_once_with(
+        should_run,
+        session,
+        "/abc",
+        data_handler,
+        opt_fields=opt_fields,
+        json_loads=json.loads,
+    )
+    assert crawler_mock.mock_calls == [
+        call(
+            should_run,
+            session,
+            "/abc",
+            data_handler,
+            offset="",
+            opt_fields=opt_fields,
+            json_loads=json.loads,
+        ),
+        call(
+            should_run,
+            session,
+            "/abc",
+            data_handler,
+            offset="",
+            descending="1",
+            opt_fields=opt_fields,
+            json_loads=json.loads,
+        ),
+    ]
+
+
 @patch("prozorro_crawler.main.asyncio.sleep")
 async def test_init_feed(sleep_mock: MagicMock) -> None:
     data_handler = AsyncMock()
@@ -166,6 +224,34 @@ async def test_init_feed(sleep_mock: MagicMock) -> None:
         call(FEED_STEP_INTERVAL),
     ]
     data_handler.assert_called_once_with(session, ["w", "t", "f"])
+
+
+@patch("prozorro_crawler.main.asyncio.sleep")
+async def test_init_feed_empty_data(sleep_mock: MagicMock) -> None:
+    data_handler = AsyncMock()
+    session = MagicMock()
+    response = MagicMock(
+        status=200,
+        json=AsyncMock(
+            return_value={
+                "next_page": {"offset": ""},
+                "prev_page": {"offset": ""},
+                "data": [],
+            },
+        ),
+    )
+    session.get = AsyncMock(return_value=response)
+
+    result = await init_feed(
+        should_run,
+        session,
+        "/abc",
+        data_handler,
+        json_loads=json.loads,
+    )
+
+    assert result == ("", "")
+    data_handler.assert_called_once_with(session, [])
 
 
 @patch("prozorro_crawler.main.asyncio.sleep")

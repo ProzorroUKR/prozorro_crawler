@@ -3,7 +3,7 @@ from prozorro_crawler.main import (
     should_run,
     run_app,
 )
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch, call, ANY
 from prozorro_crawler.settings import (
     BASE_URL,
     API_RESOURCE,
@@ -41,15 +41,17 @@ async def test_main_function(
 
 @pytest.mark.asyncio
 @patch("prozorro_crawler.main.aiohttp.ClientSession")
-@patch("prozorro_crawler.main.init_crawler")
+@patch("prozorro_crawler.main.init_crawler", new_callable=AsyncMock)
 async def test_init_crawler_saved_feed(
-    init_crawler_mock: MagicMock,
+    init_crawler_mock: AsyncMock,
     client_mock: MagicMock,
 ) -> None:
     data_handler = AsyncMock()
     prepare_storage = AsyncMock()
     additional_headers = {"User-Agent": "Safari", "Auth": "Token"}
-    session = AsyncMock()
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
     client_mock.return_value = session
 
     try:
@@ -69,7 +71,7 @@ async def test_init_crawler_saved_feed(
     assert init_crawler_mock.mock_calls == [
         call(
             should_run,
-            session,
+            ANY,
             url,
             data_handler,
             opt_fields=opt_fields,
