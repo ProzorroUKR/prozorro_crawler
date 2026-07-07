@@ -41,13 +41,18 @@ LOGGER_NAME = getenv("LOGGER_NAME", "PRO-ZORRO-CRAWLER")
 LOG_LEVEL = int(getenv("LOG_LEVEL", logging.INFO))
 logger = logging.getLogger(LOGGER_NAME)
 logger.setLevel(LOG_LEVEL)
-logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter(  # type: ignore[no-untyped-call]
-    "%(levelname)s %(asctime)s %(module)s %(process)d "
-    "%(message)s %(pathname)s $(lineno)d $(funcName)s",
-)
-logHandler.setFormatter(formatter)
-logger.addHandler(logHandler)
+root = logging.getLogger()
+if not root.handlers:
+    logHandler = logging.StreamHandler()
+    formatter = jsonlogger.JsonFormatter(  # type: ignore[no-untyped-call]
+        "%(levelname)s %(asctime)s %(module)s %(process)d "
+        "%(message)s %(pathname)s $(lineno)d $(funcName)s",
+    )
+    logHandler.setFormatter(formatter)
+    logger.addHandler(logHandler)
+    logger.propagate = False
+else:
+    logger.propagate = True
 
 # timeouts for api calls
 # every FEED_STEP_INTERVAL every crawler(backward and forward) gets API_LIMIT items
