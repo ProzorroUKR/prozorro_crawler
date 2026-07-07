@@ -16,16 +16,38 @@ from .base import (
 )
 import asyncio
 
+client: Optional[AsyncIOMotorClient[Any]] = None
+
+
+def get_client() -> AsyncIOMotorClient[Any]:
+    global client
+    if client is None:
+        client = AsyncIOMotorClient(MONGODB_URL)
+    return client
+
+
+def close_client() -> None:
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
 
 async def close_connection() -> None:
-    return None  # TODO: do I need to close MongoDB connection ?
+    close_client()
 
 
 def get_mongodb_collection(collection_name: str) -> AsyncIOMotorCollection[Any]:
-    client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(MONGODB_URL)
-    db = client.get_database(MONGODB_DATABASE)
-    collection = db.get_collection(collection_name)
-    return collection
+    db = get_client().get_database(MONGODB_DATABASE)
+    return db.get_collection(collection_name)
+
+
+async def handle_db_exception(e: PyMongoError, message: str) -> None:
+    logger.warning(
+        f"{message} {type(e)}: {e}",
+        extra={"MESSAGE_ID": "MONGODB_EXC"},
+    )
+    await asyncio.sleep(DB_ERROR_INTERVAL)
 
 
 async def save_feed_position(data: dict[str, str]) -> None:
@@ -38,11 +60,7 @@ async def save_feed_position(data: dict[str, str]) -> None:
                 upsert=True,
             )
         except PyMongoError as e:
-            logger.warning(
-                f"Save feed pos {type(e)}: {e}",
-                extra={"MESSAGE_ID": "MONGODB_EXC"},
-            )
-            await asyncio.sleep(DB_ERROR_INTERVAL)
+            await handle_db_exception(e, "Save feed pos")
         else:
             return None
 
@@ -53,11 +71,7 @@ async def get_feed_position() -> Optional[dict[str, str]]:
         try:
             return await collection.find_one({"_id": MONGODB_STATE_ID})
         except PyMongoError as e:
-            logger.warning(
-                f"Get feed pos {type(e)}: {e}",
-                extra={"MESSAGE_ID": "MONGODB_EXC"},
-            )
-            await asyncio.sleep(DB_ERROR_INTERVAL)
+            await handle_db_exception(e, "Get feed pos")
 
 
 async def drop_feed_position() -> None:
@@ -74,10 +88,6 @@ async def drop_feed_position() -> None:
                 },
             )
         except PyMongoError as e:
-            logger.warning(
-                f"Drop feed pos {type(e)}: {e}",
-                extra={"MESSAGE_ID": "MONGODB_EXC"},
-            )
-            await asyncio.sleep(DB_ERROR_INTERVAL)
+            await handle_db_exception(e, "Drop feed pos")
         else:
             return None
