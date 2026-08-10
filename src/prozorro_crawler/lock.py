@@ -1,5 +1,5 @@
 from typing import Awaitable, Callable, Any
-from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.asynchronous.collection import AsyncCollection
 from prozorro_crawler.storage.mongodb import get_mongodb_collection
 from prozorro_crawler.settings import (
     LOCK_ENABLED,
@@ -19,7 +19,7 @@ import os
 import signal
 
 
-def get_lock_collection() -> AsyncIOMotorCollection[Any]:
+def get_lock_collection() -> AsyncCollection[Any]:
     return get_mongodb_collection(LOCK_COLLECTION_NAME)
 
 
