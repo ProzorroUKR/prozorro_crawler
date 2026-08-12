@@ -5,7 +5,7 @@ requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.6.2,<4",
     "asyncpg>=0.25.0,<1",
-    "motor~=3.7",
+    "pymongo>=4.13,<5",
     "python-dateutil>=2.4.1",
     "python-json-logger>=2.0.2,<3",
     "pytz>=2025.2",

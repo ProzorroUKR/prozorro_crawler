@@ -1,7 +1,8 @@
 from typing import Any, Optional
 
 from pymongo.errors import PyMongoError
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from pymongo.asynchronous.mongo_client import AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
 from prozorro_crawler.settings import (
     logger,
     MONGODB_URL,
@@ -16,28 +17,28 @@ from .base import (
 )
 import asyncio
 
-client: Optional[AsyncIOMotorClient[Any]] = None
+client: Optional[AsyncMongoClient[Any]] = None
 
 
-def get_client() -> AsyncIOMotorClient[Any]:
+def get_client() -> AsyncMongoClient[Any]:
     global client
     if client is None:
-        client = AsyncIOMotorClient(MONGODB_URL)
+        client = AsyncMongoClient(MONGODB_URL)
     return client
 
 
-def close_client() -> None:
+async def close_client() -> None:
     global client
     if client is not None:
-        client.close()
+        await client.close()
         client = None
 
 
 async def close_connection() -> None:
-    close_client()
+    await close_client()
 
 
-def get_mongodb_collection(collection_name: str) -> AsyncIOMotorCollection[Any]:
+def get_mongodb_collection(collection_name: str) -> AsyncCollection[Any]:
     db = get_client().get_database(MONGODB_DATABASE)
     return db.get_collection(collection_name)
 
